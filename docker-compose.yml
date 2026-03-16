@@ -1,0 +1,83 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ctrms
+      POSTGRES_USER: ctrms
+      POSTGRES_PASSWORD: ctrms
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ctrms -d ctrms"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DEBUG: "False"
+      SECRET_KEY: "change-me"
+      ALLOWED_HOSTS: "localhost,127.0.0.1"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:8000"
+      DATABASE_URL: "postgres://ctrms:ctrms@db:5432/ctrms"
+      SERVE_MEDIA: "True"
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+      CTRMS_ADMIN_USERNAME: "admin"
+      CTRMS_ADMIN_EMAIL: "admin@example.com"
+      CTRMS_ADMIN_PASSWORD: "AdminPass123!"
+      CTRMS_DIRECTOR_USERNAME: "director"
+      CTRMS_DIRECTOR_EMAIL: "director@example.com"
+      CTRMS_DIRECTOR_PASSWORD: "DirectorPass123!"
+    ports:
+      - "8000:8000"
+    volumes:
+      - media_data:/app/media
+
+  celery_worker:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DEBUG: "False"
+      SECRET_KEY: "change-me"
+      ALLOWED_HOSTS: "localhost,127.0.0.1"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:8000"
+      DATABASE_URL: "postgres://ctrms:ctrms@db:5432/ctrms"
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+    command: ["celery", "-A", "ctrms_config", "worker", "-l", "INFO"]
+
+  celery_beat:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DEBUG: "False"
+      SECRET_KEY: "change-me"
+      ALLOWED_HOSTS: "localhost,127.0.0.1"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:8000"
+      DATABASE_URL: "postgres://ctrms:ctrms@db:5432/ctrms"
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+    command: ["celery", "-A", "ctrms_config", "beat", "-l", "INFO"]
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:

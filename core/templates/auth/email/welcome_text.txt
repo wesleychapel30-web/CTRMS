@@ -1,0 +1,46 @@
+Welcome to {{ organization_name }}! - Your Account Has Been Created
+
+Hello {{ user_name }},
+
+✓ Your account has been created successfully and is ready to use.
+
+ACCOUNT DETAILS:
+- Username: {{ username }}
+- Email: {{ email }}
+- Name: {{ user_name }}
+
+GETTING STARTED:
+1. Log in at: {{ login_url }}
+2. Complete your profile: {{ profile_url }}
+3. Set your preferences: {{ preferences_url }}
+4. Start submitting requests!
+
+WHAT YOU CAN DO NOW:
+📝 Submit Requests - Create financial, medical, or construction requests
+📊 Track Status - Monitor your request progress in real-time
+📬 Receive Updates - Get notifications when requests are reviewed or approved
+⚙️ Customize Settings - Set your notification frequency and preferences
+
+QUICK START:
+Log in to your account and complete the following:
+1. Update your profile with phone number, address, and organization
+2. Configure notification preferences (email frequency, quiet hours, etc.)
+3. Upload a profile picture (optional)
+4. Review available request categories
+
+NEED HELP?
+Visit our support portal: {{ support_url }}
+Email us: {{ support_email }}
+
+SECURITY TIPS:
+✓ Never share your password with anyone
+✓ Always log out when using shared computers
+✓ Keep your email and contact information up-to-date
+✓ Change your password regularly for security
+
+---
+
+This is an automated email. Please do not reply to this message.
+
+© {{ current_year }} {{ organization_name }}. All rights reserved.
+{{ organization_website }}

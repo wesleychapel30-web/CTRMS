@@ -1,0 +1,149 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #28a745;
+        }
+        .header h1 {
+            color: #28a745;
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .button:hover {
+            background-color: #218838;
+        }
+        .footer {
+            text-align: center;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #666;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 15px 0;
+            color: #155724;
+        }
+        .next-steps {
+            background-color: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .next-steps h3 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        .next-steps ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .next-steps li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Welcome to {{ organization_name }}!</h1>
+            <p>Your Account Has Been Created</p>
+        </div>
+
+        <div class="content">
+            <h2>Hello {{ user_name }},</h2>
+
+            <div class="success">
+                <strong>✓ Account created successfully!</strong><br>
+                Your registration is complete and your account is ready to use.
+            </div>
+
+            <h3>Account Details:</h3>
+            <ul>
+                <li><strong>Username:</strong> {{ username }}</li>
+                <li><strong>Email:</strong> {{ email }}</li>
+                <li><strong>Name:</strong> {{ user_name }}</li>
+            </ul>
+
+            <div class="next-steps">
+                <h3>Getting Started</h3>
+                <ol>
+                    <li><a href="{{ login_url }}">Log in</a> with your username and password</li>
+                    <li>Complete your <a href="{{ profile_url }}">user profile</a> with additional information</li>
+                    <li>Configure your <a href="{{ preferences_url }}">notification preferences</a></li>
+                    <li>Start using {{ organization_name }} to submit requests and track approvals</li>
+                </ol>
+            </div>
+
+            <h3>What You Can Do Now:</h3>
+            <ul>
+                <li>📝 <strong>Submit Requests</strong> - Create new financial, medical, or construction requests</li>
+                <li>📊 <strong>Track Status</strong> - Monitor your request progress in real-time</li>
+                <li>📬 <strong>Receive Updates</strong> - Get notifications when your requests are reviewed or approved</li>
+                <li>⚙️ <strong>Customize Settings</strong> - Set your notification frequency and preferences</li>
+            </ul>
+
+            <h3>Quick Links:</h3>
+            <p>
+                <a href="{{ login_url }}" class="button">Log In to Your Account</a>
+            </p>
+
+            <h3>Need Help?</h3>
+            <p>
+                If you have any questions or need assistance, please visit our <a href="{{ support_url }}">support portal</a> 
+                or contact us at <strong>{{ support_email }}</strong>.
+            </p>
+
+            <h3>Security Reminder:</h3>
+            <ul>
+                <li>Never share your password with anyone</li>
+                <li>Always log out when using shared computers</li>
+                <li>Keep your email and contact information up-to-date</li>
+                <li>Change your password regularly for security</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            <p>This is an automated email. Please do not reply to this message.</p>
+            <p>&copy; {{ current_year }} {{ organization_name }}. All rights reserved.</p>
+            <p><a href="{{ organization_website }}">Visit Our Website</a></p>
+        </div>
+    </div>
+</body>
+</html>
