@@ -110,6 +110,10 @@ yarn-error.log*
 pnpm-debug.log*
 frontend/tsconfig.app.tsbuildinfo
 
+# Keep frontend source helpers tracked
+!frontend/src/lib/
+!frontend/src/lib/**
+
 # Local app data
 logs/
 test_media_requests/
