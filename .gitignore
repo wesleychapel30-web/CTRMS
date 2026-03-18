@@ -109,6 +109,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 frontend/tsconfig.app.tsbuildinfo
+frontend/tsconfig.node.tsbuildinfo
 
 # Keep frontend source helpers tracked
 !frontend/src/lib/

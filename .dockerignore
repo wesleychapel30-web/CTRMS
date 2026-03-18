@@ -11,9 +11,10 @@ __pycache__/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/tsconfig.app.tsbuildinfo
+frontend/tsconfig.node.tsbuildinfo
 staticfiles/
 db.sqlite3
 test_media_requests/
 logs/
 .env
-
