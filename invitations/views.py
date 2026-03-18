@@ -17,6 +17,7 @@ from core.rbac import (
     user_has_permission,
     user_has_role,
 )
+from core.timeline import can_compose_timeline_entry, create_invitation_timeline_entry, create_record_comment
 from .models import Invitation, InvitationAttachment
 from .serializers import (
     InvitationSerializer, InvitationCreateUpdateSerializer,
@@ -29,6 +30,13 @@ def _get_client_ip(request):
     if x_forwarded_for:
         return x_forwarded_for.split(',')[0]
     return request.META.get('REMOTE_ADDR')
+
+
+def _append_log_comment(description: str, comment: str | None) -> str:
+    note = (comment or '').strip()
+    if not note:
+        return description
+    return f"{description} Comment: {note}"
 
 
 INVITATION_ALLOWED_TRANSITIONS = {
@@ -151,6 +159,8 @@ class InvitationViewSet(viewsets.ModelViewSet):
             extra = [drf_permission_required("invitation:complete")]
         elif self.action == "upload_attachment":
             extra = [drf_any_permission_required(["invitation:upload_all", "invitation:upload_own"])]
+        elif self.action == "timeline_entries":
+            extra = [drf_any_permission_required(["invitation:view_all", "invitation:view_own", "invitation:update_all", "invitation:update_own", "invitation:accept", "invitation:decline", "invitation:confirm", "invitation:revert"])]
         elif self.action == "send_reminders":
             extra = [drf_permission_required("reminder:send")]
 
@@ -190,6 +200,13 @@ class InvitationViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         
         invitation = serializer.instance
+        create_invitation_timeline_entry(
+            invitation_obj=invitation,
+            entry_type="system_event",
+            actor=request.user,
+            title="Invitation created",
+            new_status=invitation.status,
+        )
 
         notify_users(
             recipients=get_recipients_for_roles([User.Role.DIRECTOR]),
@@ -243,6 +260,15 @@ class InvitationViewSet(viewsets.ModelViewSet):
         serializer = InvitationStatusUpdateSerializer(invitation, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save(reviewed_by=request.user, reviewed_at=timezone.now())
+        create_invitation_timeline_entry(
+            invitation_obj=invitation,
+            entry_type="status_change",
+            actor=request.user,
+            title="Invitation status updated",
+            body=invitation.review_notes or "",
+            old_status=before_status,
+            new_status=invitation.status,
+        )
 
         recipients = list(get_recipients_for_roles([User.Role.ADMIN]))
         if invitation.created_by and invitation.created_by.is_active:
@@ -264,7 +290,10 @@ class InvitationViewSet(viewsets.ModelViewSet):
             content_type="Invitation",
             object_id=str(invitation.id),
             ip_address=_get_client_ip(request),
-            description=f"Updated invitation status for “{invitation.event_title}” ({before_status} -> {invitation.status}).",
+            description=_append_log_comment(
+                f"Updated invitation status for “{invitation.event_title}” ({before_status} -> {invitation.status}).",
+                invitation.review_notes,
+            ),
         )
 
         EmailNotificationService.send_invitation_status_alert(
@@ -291,6 +320,15 @@ class InvitationViewSet(viewsets.ModelViewSet):
         invitation.reviewed_at = timezone.now()
         invitation.review_notes = request.data.get('notes', '')
         invitation.save()
+        create_invitation_timeline_entry(
+            invitation_obj=invitation,
+            entry_type="approval_action",
+            actor=request.user,
+            title="Invitation accepted",
+            body=invitation.review_notes or "",
+            old_status=Invitation.Status.PENDING_REVIEW,
+            new_status=Invitation.Status.ACCEPTED,
+        )
 
         recipients = list(get_recipients_for_roles([User.Role.ADMIN]))
         if invitation.created_by and invitation.created_by.is_active:
@@ -312,7 +350,10 @@ class InvitationViewSet(viewsets.ModelViewSet):
             content_type="Invitation",
             object_id=str(invitation.id),
             ip_address=_get_client_ip(request),
-            description=f"Accepted invitation “{invitation.event_title}”.",
+            description=_append_log_comment(
+                f"Accepted invitation “{invitation.event_title}”.",
+                invitation.review_notes,
+            ),
         )
 
         EmailNotificationService.send_invitation_status_alert(
@@ -338,6 +379,15 @@ class InvitationViewSet(viewsets.ModelViewSet):
         invitation.reviewed_at = timezone.now()
         invitation.review_notes = request.data.get('reason', '')
         invitation.save()
+        create_invitation_timeline_entry(
+            invitation_obj=invitation,
+            entry_type="approval_action",
+            actor=request.user,
+            title="Invitation declined",
+            body=invitation.review_notes or "",
+            old_status=Invitation.Status.PENDING_REVIEW,
+            new_status=Invitation.Status.DECLINED,
+        )
 
         recipients = list(get_recipients_for_roles([User.Role.ADMIN]))
         if invitation.created_by and invitation.created_by.is_active:
@@ -359,7 +409,10 @@ class InvitationViewSet(viewsets.ModelViewSet):
             content_type="Invitation",
             object_id=str(invitation.id),
             ip_address=_get_client_ip(request),
-            description=f"Declined invitation “{invitation.event_title}”.",
+            description=_append_log_comment(
+                f"Declined invitation “{invitation.event_title}”.",
+                invitation.review_notes,
+            ),
         )
 
         EmailNotificationService.send_invitation_status_alert(
@@ -384,6 +437,14 @@ class InvitationViewSet(viewsets.ModelViewSet):
         invitation.reviewed_by = request.user
         invitation.reviewed_at = timezone.now()
         invitation.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'updated_at'])
+        create_invitation_timeline_entry(
+            invitation_obj=invitation,
+            entry_type="approval_action",
+            actor=request.user,
+            title="Attendance confirmed",
+            old_status=Invitation.Status.ACCEPTED,
+            new_status=Invitation.Status.CONFIRMED_ATTENDANCE,
+        )
 
         recipients = list(get_recipients_for_roles([User.Role.ADMIN]))
         if invitation.created_by and invitation.created_by.is_active:
@@ -458,6 +519,15 @@ class InvitationViewSet(viewsets.ModelViewSet):
         invitation.reviewed_at = timezone.now()
         invitation.review_notes = reason
         invitation.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_notes', 'updated_at'])
+        create_invitation_timeline_entry(
+            invitation_obj=invitation,
+            entry_type="revert_action",
+            actor=request.user,
+            title="Decision reverted",
+            body=reason,
+            old_status=before_status,
+            new_status=target_status,
+        )
 
         recipients = list(get_recipients_for_roles([User.Role.ADMIN, User.Role.DIRECTOR]))
         if invitation.created_by and invitation.created_by.is_active:
@@ -479,10 +549,9 @@ class InvitationViewSet(viewsets.ModelViewSet):
             content_type="Invitation",
             object_id=str(invitation.id),
             ip_address=_get_client_ip(request),
-            description=(
-                f"Reverted invitation decision for “{invitation.event_title}” "
-                f"({before_status} -> {invitation.status})"
-                + (f". Reason: {reason}" if reason else ".")
+            description=_append_log_comment(
+                f"Reverted invitation decision for “{invitation.event_title}” ({before_status} -> {invitation.status}).",
+                reason,
             ),
         )
 
@@ -509,6 +578,14 @@ class InvitationViewSet(viewsets.ModelViewSet):
         invitation.reviewed_by = request.user
         invitation.reviewed_at = timezone.now()
         invitation.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'updated_at'])
+        create_invitation_timeline_entry(
+            invitation_obj=invitation,
+            entry_type="status_change",
+            actor=request.user,
+            title="Invitation marked completed",
+            old_status=Invitation.Status.CONFIRMED_ATTENDANCE,
+            new_status=Invitation.Status.COMPLETED,
+        )
 
         recipients = list(get_recipients_for_roles([User.Role.ADMIN]))
         if invitation.created_by and invitation.created_by.is_active:
@@ -542,6 +619,39 @@ class InvitationViewSet(viewsets.ModelViewSet):
         return Response(InvitationSerializer(invitation, context={"request": request}).data)
 
     @action(detail=True, methods=['post'])
+    def timeline_entries(self, request, pk=None):
+        """Add a persistent chatter entry for this invitation."""
+        invitation = self.get_object()
+        if not can_compose_timeline_entry(request.user):
+            return Response({'error': 'Only Directors or Administrators can add notes to the invitation history.'}, status=status.HTTP_403_FORBIDDEN)
+
+        mode = (request.data.get('mode') or 'comment').strip().lower()
+        body = (request.data.get('body') or request.data.get('comment') or '').strip()
+        if not body:
+            return Response({'error': 'Comment body is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_internal = mode == 'internal_note'
+        entry = create_record_comment(
+            invitation_obj=invitation,
+            actor=request.user,
+            body=body,
+            internal=is_internal,
+        )
+        if not entry:
+            return Response({'error': 'Unable to create timeline entry.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        AuditLog.objects.create(
+            user=request.user,
+            action_type=AuditLog.ActionType.UPDATE,
+            content_type="Invitation",
+            object_id=str(invitation.id),
+            ip_address=_get_client_ip(request),
+            description=f"Added {'internal note' if is_internal else 'comment'} to invitation “{invitation.event_title}”.",
+        )
+
+        return Response(InvitationSerializer(invitation, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
     def upload_attachment(self, request, pk=None):
         invitation = self.get_object()
         attachment = request.FILES.get('file')
@@ -568,6 +678,15 @@ class InvitationViewSet(viewsets.ModelViewSet):
             object_id=str(invitation_attachment.id),
             ip_address=_get_client_ip(request),
             description=f"Uploaded an attachment for “{invitation.event_title}”.",
+        )
+        create_invitation_timeline_entry(
+            invitation_obj=invitation,
+            entry_type="system_event",
+            actor=request.user,
+            title="Attachment uploaded",
+            body=f"Uploaded attachment: {attachment_type}",
+            old_status=invitation.status,
+            new_status=invitation.status,
         )
 
         return Response(InvitationAttachmentSerializer(invitation_attachment, context={"request": request}).data, status=status.HTTP_201_CREATED)

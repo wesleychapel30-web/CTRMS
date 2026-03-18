@@ -3,10 +3,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { AttachmentPreviewPanel } from "../components/AttachmentPreviewPanel";
 import { DetailSectionCard } from "../components/DetailSectionCard";
+import { RecordChatter } from "../components/RecordChatter";
 import { SectionCard } from "../components/SectionCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useSession } from "../context/SessionContext";
+import { useToast } from "../context/ToastContext";
 import {
+  addRequestTimelineEntry,
   addRequestPayment,
   approveRequest,
   cancelRequest,
@@ -36,7 +39,8 @@ type RequestWorkflowAction =
 
 export function RequestDetailsPage() {
   const { requestId } = useParams();
-  const { user, hasPermission } = useSession();
+  const { hasPermission, hasRole } = useSession();
+  const toast = useToast();
   const [requestRecord, setRequestRecord] = useState<RequestRecord | null>(null);
   const [notes, setNotes] = useState("");
   const [approvedAmount, setApprovedAmount] = useState("");
@@ -51,7 +55,8 @@ export function RequestDetailsPage() {
   const [previewFile, setPreviewFile] = useState<{ title: string; fileName?: string; fileUrl: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<RequestWorkflowAction | null>(null);
   const [isActionSubmitting, setIsActionSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isTimelineSubmitting, setIsTimelineSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadRequest = async () => {
     if (!requestId) {
@@ -59,6 +64,7 @@ export function RequestDetailsPage() {
     }
     try {
       const data = await fetchRequest(requestId);
+      setLoadError(null);
       setRequestRecord(data);
       setApprovedAmount(data.approved_amount ? String(data.approved_amount) : "");
       const suggestedRecordAmount =
@@ -70,7 +76,7 @@ export function RequestDetailsPage() {
       setAdditionalPaymentAmount("");
       setNotes(data.review_notes ?? "");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to load request");
+      setLoadError(reason instanceof Error ? reason.message : "Unable to load request");
     }
   };
 
@@ -78,15 +84,15 @@ export function RequestDetailsPage() {
     void loadRequest();
   }, [requestId]);
 
-  if (error) {
-    return <SectionCard title="Request Details">{error}</SectionCard>;
+  if (loadError) {
+    return <SectionCard title="Request Details">{loadError}</SectionCard>;
   }
 
   if (!requestRecord) {
     return <SectionCard title="Request Details">Loading request record...</SectionCard>;
   }
 
-  const isDirector = user?.role === "director";
+  const isDirector = hasRole("director");
   const canApprove = isDirector && hasPermission("request:approve");
   const canReject = isDirector && hasPermission("request:reject");
   const canStartReview = hasPermission("request:update_all") || hasPermission("request:update_own");
@@ -108,13 +114,25 @@ export function RequestDetailsPage() {
   const showReverse = canReverse && visibility.showReverse;
   const canUploadForStatus = !["cancelled", "archived"].includes(requestRecord.status);
   const remainingBalance = (requestRecord.approved_amount ?? 0) - (requestRecord.disbursed_amount ?? 0);
+  const canComposeTimeline = hasRole("director") || hasRole("admin");
+
+  const actionSuccessMessages: Record<RequestWorkflowAction, { title: string; message: string }> = {
+    "start-review": { title: "Request updated", message: "Request moved to under review." },
+    approve: { title: "Request approved", message: "Request approved successfully." },
+    reject: { title: "Request rejected", message: "Request rejected successfully." },
+    "record-payment": { title: "Payment recorded", message: "Payment recorded successfully." },
+    "add-payment": { title: "Payment recorded", message: "Additional payment recorded successfully." },
+    "mark-completed": { title: "Payment completed", message: "Payment marked as completed." },
+    cancel: { title: "Request updated", message: "Request cancelled." },
+    restore: { title: "Request updated", message: "Request restored." },
+    reverse: { title: "Decision reverted", message: "Decision reverted successfully." },
+  };
 
   const runAction = async (action: RequestWorkflowAction) => {
     if (!requestRecord) {
       return;
     }
 
-    setError(null);
     setIsActionSubmitting(true);
     try {
       if (action === "start-review") {
@@ -152,11 +170,33 @@ export function RequestDetailsPage() {
         await reverseRequest(requestRecord.id, adminComment);
       }
       await loadRequest();
+      const success = actionSuccessMessages[action];
+      toast.success(success.message, success.title);
       setPendingAction(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to update request workflow");
+      toast.error(reason instanceof Error ? reason.message : "Unable to update request workflow");
     } finally {
       setIsActionSubmitting(false);
+    }
+  };
+
+  const submitTimelineEntry = async (payload: { mode: "comment" | "internal_note"; body: string }) => {
+    if (!requestRecord) {
+      return;
+    }
+    setIsTimelineSubmitting(true);
+    try {
+      await addRequestTimelineEntry(requestRecord.id, payload);
+      await loadRequest();
+      toast.success(
+        payload.mode === "internal_note" ? "Internal note saved." : "Comment added successfully.",
+        payload.mode === "internal_note" ? "Note saved" : "Comment added"
+      );
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : "Unable to save note");
+      throw reason;
+    } finally {
+      setIsTimelineSubmitting(false);
     }
   };
 
@@ -242,33 +282,18 @@ export function RequestDetailsPage() {
           </div>
         </DetailSectionCard>
 
-        {requestRecord.history?.length ? (
-          <DetailSectionCard title="Status / Timeline" subtitle="Status changes and decisions.">
-            <div className="space-y-3">
-              {requestRecord.history.slice(0, 12).map((entry) => (
-                <div
-                  key={entry.id}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold text-slate-900 dark:text-white">
-                      {entry.action.split("_").join(" ")}
-                      {entry.performed_by_name ? ` · ${entry.performed_by_name}` : ""}
-                    </p>
-                    <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{formatDateTime(entry.created_at)}</p>
-                  </div>
-                  {entry.from_status || entry.to_status ? (
-                    <p className="mt-1 text-slate-500 dark:text-slate-300">
-                      {entry.from_status ? entry.from_status.split("_").join(" ") : "n/a"} →{" "}
-                      {entry.to_status ? entry.to_status.split("_").join(" ") : "n/a"}
-                    </p>
-                  ) : null}
-                  {entry.comment ? <p className="mt-2 text-slate-600 dark:text-slate-200">{entry.comment}</p> : null}
-                </div>
-              ))}
-            </div>
-          </DetailSectionCard>
-        ) : null}
+        <DetailSectionCard title="Record Timeline" subtitle="Comments, approvals, status changes, and workflow notes.">
+          <RecordChatter
+            title="Record History"
+            subtitle="Permanent comments and workflow events for this request."
+            entries={requestRecord.timeline_entries ?? []}
+            emptyMessage="No request history is available yet."
+            canAddComment={canComposeTimeline}
+            canAddInternalNote={canComposeTimeline}
+            isSubmitting={isTimelineSubmitting}
+            onSubmit={submitTimelineEntry}
+          />
+        </DetailSectionCard>
       </div>
 
       <div className="space-y-6">
@@ -508,7 +533,13 @@ export function RequestDetailsPage() {
               <button
                 onClick={() =>
                   uploadFile &&
-                  void uploadRequestDocument(requestRecord.id, uploadFile, uploadType).then(loadRequest).catch((reason) => setError(reason.message))
+                  void uploadRequestDocument(requestRecord.id, uploadFile, uploadType)
+                    .then(() => loadRequest())
+                    .then(() => {
+                      toast.success("Document uploaded successfully.", "Document added");
+                      setUploadFile(null);
+                    })
+                    .catch((reason) => toast.error(reason instanceof Error ? reason.message : "Upload failed"))
                 }
                 className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold dark:border-white/10"
               >

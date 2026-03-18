@@ -108,6 +108,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+frontend/tsconfig.app.tsbuildinfo
 
 # Local app data
 logs/

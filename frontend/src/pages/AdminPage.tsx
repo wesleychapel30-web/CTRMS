@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "../components/DataTable";
 import { SectionCard } from "../components/SectionCard";
 import { UserActionMenu } from "../components/UserActionMenu";
+import { useToast } from "../context/ToastContext";
 import {
   createUser,
   deactivateUser,
   fetchActivityLogs,
   fetchRbacOverview,
   fetchUserManagement,
+  isAuthError,
   reactivateUser,
   resetUserPassword,
   updateRolePermissions,
@@ -60,15 +62,19 @@ const emptyEditForm = {
 };
 
 export function AdminPage() {
-  const { hasPermission } = useSession();
+  const { hasPermission, refresh } = useSession();
+  const toast = useToast();
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [activity, setActivity] = useState<ActivityLogRecord[]>([]);
   const [rbac, setRbac] = useState<Awaited<ReturnType<typeof fetchRbacOverview>> | null>(null);
   const [selectedRoleKey, setSelectedRoleKey] = useState("");
   const [selectedPermissionKeys, setSelectedPermissionKeys] = useState<string[]>([]);
   const [isSavingRbac, setIsSavingRbac] = useState(false);
+  const [isLoadingRbac, setIsLoadingRbac] = useState(false);
+  const [isLoadingActivity, setIsLoadingActivity] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [rbacError, setRbacError] = useState<string | null>(null);
 
   const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -77,17 +83,29 @@ export function AdminPage() {
   const [resetPasswordValue, setResetPasswordValue] = useState("");
   const [resetForcePasswordChange, setResetForcePasswordChange] = useState(true);
 
-  const isAdmin = hasPermission("user:manage");
+  const canManageUsers = hasPermission("user:manage");
   const canManageRbac = hasPermission("rbac:manage");
   const canAssignRole = hasPermission("user:assign_role") || hasPermission("user:manage");
   const canDeactivateUsers = hasPermission("user:deactivate") || hasPermission("user:manage");
   const canResetPassword = hasPermission("user:reset_password") || hasPermission("user:manage");
   const canViewActivity = hasPermission("audit:view");
+  const canAccessAdminPage = canManageUsers || canManageRbac;
 
   const users = overview?.users ?? [];
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
 
   const toMessage = (reason: unknown) => (reason instanceof Error ? reason.message : "Request failed");
+  const toAccessMessage = (reason: unknown, fallback: string) => {
+    if (isAuthError(reason)) {
+      return fallback;
+    }
+    return toMessage(reason);
+  };
+  const handleActionFailure = (reason: unknown) => {
+    const message = toMessage(reason);
+    setError(message);
+    toast.error(message);
+  };
   const getUserStatus = (user: UserRow) => {
     const lifecycle = resolveUserLifecycleState(user);
     if (lifecycle === "active") return "Active";
@@ -107,25 +125,86 @@ export function AdminPage() {
 
   const loadAdmin = async () => {
     setError(null);
-    const adminData = await fetchUserManagement();
-    setOverview(adminData);
+    setActivityError(null);
+    setRbacError(null);
+
+    const tasks: Promise<void>[] = [];
+
+    if (canManageUsers) {
+      tasks.push(
+        fetchUserManagement()
+          .then((adminData) => {
+            setOverview(adminData);
+          })
+          .catch(async (reason) => {
+            setOverview(null);
+            setError(toAccessMessage(reason, "User management is not available for this account."));
+            if (isAuthError(reason)) {
+              await refresh({ silent: true }).catch(() => undefined);
+            }
+          })
+      );
+    } else {
+      setOverview(null);
+    }
 
     if (canViewActivity) {
-      const activityData = await fetchActivityLogs();
-      setActivity(activityData.logs.slice(0, 8));
+      setIsLoadingActivity(true);
+      tasks.push(
+        fetchActivityLogs()
+          .then((activityData) => {
+            setActivity(activityData.logs.slice(0, 8));
+            setActivityError(null);
+          })
+          .catch(async (reason) => {
+            setActivity([]);
+            setActivityError(toAccessMessage(reason, "Activity logs are not available for this account."));
+            if (isAuthError(reason)) {
+              await refresh({ silent: true }).catch(() => undefined);
+            }
+          })
+          .finally(() => setIsLoadingActivity(false))
+      );
     } else {
       setActivity([]);
+      setActivityError(null);
+      setIsLoadingActivity(false);
     }
 
     if (canManageRbac) {
-      const rbacOverview = await fetchRbacOverview();
-      setRbac(rbacOverview);
-      if (!selectedRoleKey && rbacOverview.roles.length) {
-        const firstRoleKey = rbacOverview.roles[0].key;
-        setSelectedRoleKey(firstRoleKey);
-        setSelectedPermissionKeys(rbacOverview.mapping[firstRoleKey] ?? []);
-      }
+      setIsLoadingRbac(true);
+      tasks.push(
+        fetchRbacOverview()
+          .then((rbacOverview) => {
+            setRbac(rbacOverview);
+            setRbacError(null);
+            const nextRoleKey =
+              (selectedRoleKey && rbacOverview.roles.some((role) => role.key === selectedRoleKey) && selectedRoleKey) ||
+              rbacOverview.roles[0]?.key ||
+              "";
+            setSelectedRoleKey(nextRoleKey);
+            setSelectedPermissionKeys(nextRoleKey ? (rbacOverview.mapping[nextRoleKey] ?? []) : []);
+          })
+          .catch(async (reason) => {
+            setRbac(null);
+            setSelectedRoleKey("");
+            setSelectedPermissionKeys([]);
+            setRbacError(toAccessMessage(reason, "Roles and permissions are not available for this account."));
+            if (isAuthError(reason)) {
+              await refresh({ silent: true }).catch(() => undefined);
+            }
+          })
+          .finally(() => setIsLoadingRbac(false))
+      );
+    } else {
+      setRbac(null);
+      setSelectedRoleKey("");
+      setSelectedPermissionKeys([]);
+      setRbacError(null);
+      setIsLoadingRbac(false);
     }
+
+    await Promise.all(tasks);
   };
 
   useEffect(() => {
@@ -147,11 +226,11 @@ export function AdminPage() {
   }, [selectedUser]);
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!canAccessAdminPage) {
       return;
     }
     void loadAdmin().catch((reason) => setError(toMessage(reason)));
-  }, [isAdmin, canManageRbac, canViewActivity]);
+  }, [canAccessAdminPage, canManageUsers, canManageRbac, canViewActivity]);
 
   const availableCreateAdditionalRoles = useMemo(
     () => ROLE_OPTIONS.filter((option) => option.key !== createForm.role),
@@ -162,14 +241,17 @@ export function AdminPage() {
     [editForm.role]
   );
 
-  if (!isAdmin) {
-    return <SectionCard title="User Management">You do not have permission to manage users.</SectionCard>;
+  if (!canAccessAdminPage) {
+    return <SectionCard title="Administration Panel">You do not have permission to access administration tools.</SectionCard>;
   }
+
+  const policyBoundPermissions = rbac?.policy_bound_permissions ?? {};
+  const rightColumnVisible = canManageRbac || canViewActivity;
 
   const updateUserStatus = async (target: UserRow, payload: Parameters<typeof updateUser>[1], message: string) => {
     setError(null);
     await updateUser(target.id, payload);
-    setStatusMessage(message);
+    toast.success(message, "User updated");
     await loadAdmin();
   };
 
@@ -193,7 +275,7 @@ export function AdminPage() {
       // Backward-compatible fallback for older backend instances.
       await updateUser(user.id, activating ? { is_active: true, is_archived: false } : { is_active: false });
     }
-    setStatusMessage(message);
+    toast.success(message, "Account updated");
     await loadAdmin();
   };
 
@@ -223,7 +305,7 @@ export function AdminPage() {
           label: "Deactivate User",
           onClick: () => {
             if (!window.confirm("Deactivate this user account?")) return;
-            void toggleUserActivation(user).catch((reason) => setError(toMessage(reason)));
+            void toggleUserActivation(user).catch(handleActionFailure);
           },
           destructive: true
         });
@@ -232,7 +314,7 @@ export function AdminPage() {
           label: "Lock User",
           onClick: () => {
             if (!window.confirm("Lock this user account?")) return;
-            void updateUserStatus(user, { is_active_staff: false }, "User locked.").catch((reason) => setError(toMessage(reason)));
+            void updateUserStatus(user, { is_active_staff: false }, "User locked.").catch(handleActionFailure);
           }
         });
         actions.push({
@@ -240,7 +322,7 @@ export function AdminPage() {
           label: "Archive User",
           onClick: () => {
             if (!window.confirm("Archive this user account?")) return;
-            void updateUserStatus(user, { is_archived: true, is_active: false }, "User archived.").catch((reason) => setError(toMessage(reason)));
+            void updateUserStatus(user, { is_archived: true, is_active: false }, "User archived.").catch(handleActionFailure);
           },
           destructive: true
         });
@@ -250,7 +332,7 @@ export function AdminPage() {
           label: "Activate User",
           onClick: () => {
             if (!window.confirm("Activate this user account?")) return;
-            void toggleUserActivation(user).catch((reason) => setError(toMessage(reason)));
+            void toggleUserActivation(user).catch(handleActionFailure);
           }
         });
         actions.push({
@@ -258,7 +340,7 @@ export function AdminPage() {
           label: "Archive User",
           onClick: () => {
             if (!window.confirm("Archive this user account?")) return;
-            void updateUserStatus(user, { is_archived: true, is_active: false }, "User archived.").catch((reason) => setError(toMessage(reason)));
+            void updateUserStatus(user, { is_archived: true, is_active: false }, "User archived.").catch(handleActionFailure);
           },
           destructive: true
         });
@@ -268,7 +350,7 @@ export function AdminPage() {
           label: "Restore User",
           onClick: () => {
             if (!window.confirm("Restore this archived user?")) return;
-            void updateUserStatus(user, { is_archived: false }, "User restored from archive.").catch((reason) => setError(toMessage(reason)));
+            void updateUserStatus(user, { is_archived: false }, "User restored from archive.").catch(handleActionFailure);
           }
         });
       } else if (lifecycle === "locked") {
@@ -277,7 +359,7 @@ export function AdminPage() {
           label: "Unlock User",
           onClick: () => {
             if (!window.confirm("Unlock this user account?")) return;
-            void updateUserStatus(user, { is_active_staff: true }, "User unlocked.").catch((reason) => setError(toMessage(reason)));
+            void updateUserStatus(user, { is_active_staff: true }, "User unlocked.").catch(handleActionFailure);
           }
         });
       }
@@ -287,10 +369,10 @@ export function AdminPage() {
   };
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-      <div className="space-y-6">
-        <SectionCard title="User Management" subtitle="Manage users, roles, and permissions.">
-          {statusMessage ? <p className="mb-3 text-sm text-emerald-700 dark:text-emerald-300">{statusMessage}</p> : null}
+    <div className={canManageUsers && rightColumnVisible ? "grid gap-6 xl:grid-cols-[1.2fr_0.8fr]" : "space-y-6"}>
+      {canManageUsers ? (
+        <div className="space-y-6">
+          <SectionCard title="User Management" subtitle="Manage users, roles, and permissions.">
           {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
 
           <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -353,10 +435,14 @@ export function AdminPage() {
                 void createUser(createForm)
                   .then(() => {
                     setCreateForm(emptyCreateForm);
-                    setStatusMessage("User created.");
+                    toast.success("User account created.", "User added");
                     return loadAdmin();
                   })
-                  .catch((reason) => setError(toMessage(reason)))
+                  .catch((reason) => {
+                    const message = toMessage(reason);
+                    setError(message);
+                    toast.error(message);
+                  })
               }
               className="mt-3 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white dark:bg-cyan-500 dark:text-slate-900"
             >
@@ -415,10 +501,10 @@ export function AdminPage() {
             rows={users}
             emptyMessage="No users found."
           />
-        </SectionCard>
+          </SectionCard>
 
-        {selectedUser ? (
-          <SectionCard title="Edit User" subtitle="Update profile and account state.">
+          {selectedUser ? (
+            <SectionCard title="Edit User" subtitle="Update profile and account state.">
             <div className="grid gap-3 md:grid-cols-2">
               <input value={editForm.full_name} onChange={(event) => setEditForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Full name" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-900" />
               <input value={editForm.email} onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" type="email" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-900" />
@@ -497,10 +583,14 @@ export function AdminPage() {
                     force_password_change: canResetPassword ? editForm.force_password_change : undefined
                   })
                     .then(() => {
-                      setStatusMessage("User updated.");
+                      toast.success("User record updated.", "Changes saved");
                       return loadAdmin();
                     })
-                    .catch((reason) => setError(toMessage(reason)))
+                    .catch((reason) => {
+                      const message = toMessage(reason);
+                      setError(message);
+                      toast.error(message);
+                    })
                 }
                 className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white dark:bg-cyan-500 dark:text-slate-900"
               >
@@ -510,11 +600,11 @@ export function AdminPage() {
                 Clear Selection
               </button>
             </div>
-          </SectionCard>
-        ) : null}
+            </SectionCard>
+          ) : null}
 
-        {resetTarget ? (
-          <SectionCard title="Reset Password" subtitle={`Reset password for ${resetTarget.name}.`}>
+          {resetTarget ? (
+            <SectionCard title="Reset Password" subtitle={`Reset password for ${resetTarget.name}.`}>
             <div className="grid gap-3 md:grid-cols-2">
               <input value={resetPasswordValue} onChange={(event) => setResetPasswordValue(event.target.value)} placeholder="New temporary password" type="password" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-900" />
               <label className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900">
@@ -531,13 +621,17 @@ export function AdminPage() {
                     force_password_change: resetForcePasswordChange
                   })
                     .then(() => {
-                      setStatusMessage("Password reset completed.");
+                      toast.success("Password reset completed.");
                       setResetTarget(null);
                       setResetPasswordValue("");
                       setResetForcePasswordChange(true);
                       return loadAdmin();
                     })
-                    .catch((reason) => setError(toMessage(reason)))
+                    .catch((reason) => {
+                      const message = toMessage(reason);
+                      setError(message);
+                      toast.error(message);
+                    })
                 }
                 className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white dark:bg-cyan-500 dark:text-slate-900"
               >
@@ -547,15 +641,25 @@ export function AdminPage() {
                 Cancel
               </button>
             </div>
-          </SectionCard>
-        ) : null}
-      </div>
+            </SectionCard>
+          ) : null}
+        </div>
+      ) : null}
 
-      <div className="space-y-6">
+      {rightColumnVisible ? (
+        <div className="space-y-6">
         {canManageRbac ? (
           <SectionCard title="Roles & Permissions" subtitle="Permission mapping by role.">
-            {rbac ? (
+            {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
+            {isLoadingRbac ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">Loading role permissions...</p>
+            ) : rbacError ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">{rbacError}</p>
+            ) : rbac ? (
               <div className="space-y-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Permissions marked as policy-managed are enforced by workflow rules and cannot be edited here.
+                </p>
                 <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
                   <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Role</span>
                   <select
@@ -576,24 +680,39 @@ export function AdminPage() {
                 </label>
                 <div className="max-h-[26rem] overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
                   <div className="space-y-2">
-                    {rbac.permissions.map((perm) => (
-                      <label key={perm.key} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-                        <input
-                          type="checkbox"
-                          checked={selectedPermissionKeys.includes(perm.key)}
-                          onChange={(event) => {
-                            const next = new Set(selectedPermissionKeys);
-                            if (event.target.checked) next.add(perm.key);
-                            else next.delete(perm.key);
-                            setSelectedPermissionKeys(Array.from(next).sort());
-                          }}
-                        />
-                        <span className="min-w-0">
-                          <span className="block font-medium text-slate-900 dark:text-slate-100">{perm.name}</span>
-                          <span className="block text-xs text-slate-600 dark:text-slate-300">{perm.key}</span>
-                        </span>
-                      </label>
-                    ))}
+                    {rbac.permissions.map((perm) => {
+                      const policyRule = policyBoundPermissions[perm.key];
+                      const policyRoles = policyRule?.allowed_roles ?? [];
+                      const isPolicyManaged = Boolean(policyRule);
+                      const policyScope = policyRoles
+                        .map((roleKey) => ROLE_OPTIONS.find((option) => option.key === roleKey)?.label ?? sentenceCase(roleKey))
+                        .join(", ");
+
+                      return (
+                        <label key={perm.key} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+                          <input
+                            type="checkbox"
+                            disabled={isPolicyManaged}
+                            checked={selectedPermissionKeys.includes(perm.key)}
+                            onChange={(event) => {
+                              const next = new Set(selectedPermissionKeys);
+                              if (event.target.checked) next.add(perm.key);
+                              else next.delete(perm.key);
+                              setSelectedPermissionKeys(Array.from(next).sort());
+                            }}
+                          />
+                          <span className="min-w-0">
+                            <span className="block font-medium text-slate-900 dark:text-slate-100">{perm.name}</span>
+                            <span className="block text-xs text-slate-600 dark:text-slate-300">{perm.key}</span>
+                            {isPolicyManaged ? (
+                              <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                                Fixed by policy{policyScope ? ` for ${policyScope}` : ""}. {policyRule.reason}
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="flex justify-end">
@@ -604,14 +723,18 @@ export function AdminPage() {
                       setIsSavingRbac(true);
                       updateRolePermissions(selectedRoleKey, selectedPermissionKeys)
                         .then(() => {
-                          setStatusMessage("Role permissions updated.");
+                          toast.success("Role permissions updated.");
                           return fetchRbacOverview();
                         })
                         .then((fresh) => {
                           setRbac(fresh);
                           setSelectedPermissionKeys(fresh.mapping[selectedRoleKey] ?? []);
                         })
-                        .catch((reason) => setError(toMessage(reason)))
+                        .catch((reason) => {
+                          const message = toMessage(reason);
+                          setError(message);
+                          toast.error(message);
+                        })
                         .finally(() => setIsSavingRbac(false));
                     }}
                     className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 dark:bg-cyan-500 dark:text-slate-900"
@@ -621,14 +744,18 @@ export function AdminPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">Loading role permissions...</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Role permissions are not available.</p>
             )}
           </SectionCard>
         ) : null}
 
         <SectionCard title="Activity Logs" subtitle="Recent administration actions.">
           {canViewActivity ? (
-            activity.length ? (
+            isLoadingActivity ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">Loading activity logs...</p>
+            ) : activityError ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">{activityError}</p>
+            ) : activity.length ? (
               <div className="space-y-2">
                 {activity.map((entry) => (
                   <div key={entry.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
@@ -645,7 +772,8 @@ export function AdminPage() {
             <p className="text-sm text-slate-500 dark:text-slate-400">Activity logs are restricted to authorized roles.</p>
           )}
         </SectionCard>
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

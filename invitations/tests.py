@@ -13,7 +13,7 @@ from invitations.models import Invitation, InvitationAttachment
 from invitations.services import send_due_invitation_reminders
 from core.rbac_defaults import seed_rbac_defaults
 from core.notifications import EmailLog
-from core.models import NotificationReceipt
+from core.models import NotificationReceipt, RecordTimelineEntry
 from common.models import SystemSettings
 
 
@@ -406,6 +406,128 @@ class InvitationWorkflowTests(TestCase):
         client.force_login(staff)
         response = client.post(reverse('invitation-revert-decision', args=[invitation.pk]), {'reason': 'Blocked'})
         self.assertEqual(response.status_code, 403)
+
+    def test_invitation_detail_includes_persistent_history(self):
+        director = User.objects.create_user(
+            username='history-director',
+            password='StrongPass1',
+            email='history-director@example.com',
+            role=User.Role.DIRECTOR,
+            is_staff=True,
+        )
+        invitation = Invitation.objects.create(
+            inviting_organization='History Org',
+            event_title='History Event',
+            description='History coverage',
+            location='HQ',
+            event_date=timezone.now() + timedelta(days=6),
+            contact_person='History Contact',
+            contact_email='history@example.com',
+            contact_phone='0700000000',
+        )
+
+        client = Client()
+        client.force_login(director)
+
+        accept_response = client.post(
+            reverse('invitation-accept-invitation', args=[invitation.pk]),
+            {'notes': 'Accepted after review'},
+        )
+        self.assertEqual(accept_response.status_code, 200)
+
+        revert_response = client.post(
+            reverse('invitation-revert-decision', args=[invitation.pk]),
+            {'reason': 'Need more information'},
+        )
+        self.assertEqual(revert_response.status_code, 200)
+
+        detail_response = client.get(reverse('invitation-detail', args=[invitation.pk]))
+        self.assertEqual(detail_response.status_code, 200)
+
+        history = detail_response.json().get('history', [])
+        self.assertGreaterEqual(len(history), 2)
+        self.assertEqual(history[0]['action_label'], 'Decision reverted')
+        self.assertEqual(history[0]['comment'], 'Need more information')
+        self.assertEqual(history[0]['from_status'], Invitation.Status.ACCEPTED)
+        self.assertEqual(history[0]['to_status'], Invitation.Status.PENDING_REVIEW)
+        self.assertEqual(history[1]['action_label'], 'Invitation accepted')
+        self.assertEqual(history[1]['comment'], 'Accepted after review')
+
+    def test_invitation_timeline_entries_support_comments_and_internal_note_visibility(self):
+        director = User.objects.create_user(
+            username='timeline-inv-director',
+            password='StrongPass1',
+            email='timeline-inv-director@example.com',
+            role=User.Role.DIRECTOR,
+            is_staff=True,
+        )
+        staff = User.objects.create_user(
+            username='timeline-inv-staff',
+            password='StrongPass1',
+            email='timeline-inv-staff@example.com',
+            role=User.Role.STAFF,
+            is_staff=False,
+        )
+        auditor = User.objects.create_user(
+            username='timeline-inv-auditor',
+            password='StrongPass1',
+            email='timeline-inv-auditor@example.com',
+            role=User.Role.AUDITOR,
+            is_staff=False,
+        )
+        invitation = Invitation.objects.create(
+            inviting_organization='Timeline Invite Org',
+            event_title='Timeline Invite Event',
+            description='Timeline invitation coverage',
+            location='HQ',
+            event_date=timezone.now() + timedelta(days=4),
+            contact_person='Timeline Contact',
+            contact_email='timeline-invite@example.com',
+            contact_phone='0700000001',
+            status=Invitation.Status.PENDING_REVIEW,
+            created_by=staff,
+        )
+
+        director_client = Client()
+        director_client.force_login(director)
+
+        self.assertEqual(
+            director_client.post(
+                reverse('invitation-accept-invitation', args=[invitation.pk]),
+                {'notes': 'Accepted with scheduling note'},
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            director_client.post(
+                reverse('invitation-timeline-entries', args=[invitation.pk]),
+                json.dumps({'mode': 'internal_note', 'body': 'Director-only invitation note'}),
+                content_type='application/json',
+            ).status_code,
+            201,
+        )
+
+        self.assertTrue(
+            RecordTimelineEntry.objects.filter(
+                invitation=invitation,
+                entry_type=RecordTimelineEntry.EntryType.INTERNAL_NOTE,
+                is_internal=True,
+            ).exists()
+        )
+
+        detail_response = director_client.get(reverse('invitation-detail', args=[invitation.pk]))
+        self.assertEqual(detail_response.status_code, 200)
+        director_entries = detail_response.json().get('timeline_entries', [])
+        self.assertTrue(any(entry['entry_type'] == 'approval_action' for entry in director_entries))
+        self.assertTrue(any(entry['entry_type'] == 'internal_note' for entry in director_entries))
+
+        auditor_client = Client()
+        auditor_client.force_login(auditor)
+        auditor_detail_response = auditor_client.get(reverse('invitation-detail', args=[invitation.pk]))
+        self.assertEqual(auditor_detail_response.status_code, 200)
+        auditor_entries = auditor_detail_response.json().get('timeline_entries', [])
+        self.assertTrue(any(entry['entry_type'] == 'approval_action' for entry in auditor_entries))
+        self.assertFalse(any(entry['entry_type'] == 'internal_note' for entry in auditor_entries))
 
 
 @override_settings(

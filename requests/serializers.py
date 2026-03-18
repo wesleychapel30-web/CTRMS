@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.urls import reverse
+from core.timeline import get_request_timeline_entries, serialize_timeline_entries
 from .models import Request, RequestDocument, RequestHistory
 
 
@@ -59,10 +60,19 @@ class RequestSerializer(serializers.ModelSerializer):
     
     documents = RequestDocumentSerializer(many=True, read_only=True)
     history = RequestHistorySerializer(many=True, read_only=True)
+    timeline_entries = serializers.SerializerMethodField()
     reviewed_by_name = serializers.CharField(source='reviewed_by.get_full_name', read_only=True)
     category_display = serializers.CharField(source='get_category_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+
+    def get_timeline_entries(self, obj: Request):
+        view = self.context.get("view")
+        if getattr(view, "action", None) != "retrieve":
+            return []
+        request = self.context.get("request")
+        viewer = getattr(request, "user", None)
+        return serialize_timeline_entries(get_request_timeline_entries(obj, viewer))
     
     class Meta:
         model = Request
@@ -74,7 +84,7 @@ class RequestSerializer(serializers.ModelSerializer):
                  'status', 'status_display', 'reviewed_by', 'reviewed_by_name', 'review_notes',
                  'reviewed_at', 'payment_date', 'payment_method', 'payment_reference',
                  'created_by', 'created_by_name',
-                 'documents', 'history', 'created_at', 'updated_at')
+                 'documents', 'history', 'timeline_entries', 'created_at', 'updated_at')
         read_only_fields = ('id', 'request_id', 'remaining_balance', 'created_at', 'updated_at',
                            'reviewed_by', 'reviewed_at', 'reviewed_by_name',
                            'created_by', 'created_by_name')

@@ -8,6 +8,7 @@ from django.utils import timezone
 import json
 
 from core.models import AuditLog, Notification, NotificationReceipt, PasswordResetToken, Permission, RoleDefinition, RolePermission, UserRole
+from core.rbac import get_user_role_keys
 from core.rbac_defaults import seed_rbac_defaults
 from common.models import OrganizationSettings, SystemSettings
 from requests.models import Request
@@ -159,6 +160,44 @@ class CoreApiTests(TestCase):
         self.assertTrue(payload['success'])
         self.assertEqual(payload['branding']['site_name'], 'Brand Site')
         self.assertEqual(payload['branding']['organization_name'], 'Brand Org')
+
+    def test_get_user_role_keys_supports_prefetched_assignments(self):
+        user = User.objects.create_user(
+            username='prefetched-roles',
+            email='prefetched-roles@example.com',
+            password='StrongPass1',
+            role=User.Role.STAFF,
+            is_staff=False,
+        )
+        finance_role = RoleDefinition.objects.get(key=User.Role.FINANCE_OFFICER)
+        UserRole.objects.create(user=user, role=finance_role)
+
+        prefetched_user = User.objects.prefetch_related('role_assignments__role').get(pk=user.pk)
+
+        self.assertEqual(get_user_role_keys(prefetched_user), {User.Role.STAFF, User.Role.FINANCE_OFFICER})
+
+    def test_seed_preserves_customized_non_policy_role_permissions(self):
+        role_admin = RoleDefinition.objects.get(key=User.Role.ADMIN)
+        export_permission = Permission.objects.get(key='report:export')
+
+        RolePermission.objects.filter(role=role_admin, permission=export_permission).delete()
+        seed_rbac_defaults()
+
+        self.assertFalse(RolePermission.objects.filter(role=role_admin, permission=export_permission).exists())
+
+    def test_seed_reconciles_policy_bound_permissions(self):
+        role_director = RoleDefinition.objects.get(key=User.Role.DIRECTOR)
+        role_auditor = RoleDefinition.objects.get(key=User.Role.AUDITOR)
+        approve_permission = Permission.objects.get(key='request:approve')
+        audit_permission = Permission.objects.get(key='audit:view')
+
+        RolePermission.objects.filter(role=role_director, permission=approve_permission).delete()
+        RolePermission.objects.get_or_create(role=role_auditor, permission=audit_permission)
+
+        seed_rbac_defaults()
+
+        self.assertTrue(RolePermission.objects.filter(role=role_director, permission=approve_permission).exists())
+        self.assertFalse(RolePermission.objects.filter(role=role_auditor, permission=audit_permission).exists())
 
 
 class StaffAccessControlTests(TestCase):
@@ -600,6 +639,27 @@ class CoreAdminApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(UserRole.objects.filter(user=staff_user, role__key=User.Role.DIRECTOR).exists())
 
+    def test_user_management_data_includes_additional_roles(self):
+        finance_user = User.objects.create_user(
+            username='finance-listed',
+            email='finance-listed@example.com',
+            password='StrongPass1',
+            role=User.Role.STAFF,
+            is_staff=False,
+        )
+        finance_role = RoleDefinition.objects.get(key=User.Role.FINANCE_OFFICER)
+        UserRole.objects.create(user=finance_user, role=finance_role, created_by=self.admin)
+
+        client = Client()
+        client.force_login(self.admin)
+        response = client.get(reverse('api_user_management_data'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        listed_user = next(item for item in payload['users'] if item['id'] == str(finance_user.id))
+        self.assertIn(User.Role.FINANCE_OFFICER, listed_user['roles'])
+        self.assertIn(User.Role.FINANCE_OFFICER, listed_user['additional_roles'])
+
     def test_admin_can_reset_user_password_and_force_change(self):
         target = User.objects.create_user(
             username='managed-user',
@@ -907,3 +967,85 @@ class CoreAdminApiTests(TestCase):
         self.assertEqual(response.status_code, 403)
         req.refresh_from_db()
         self.assertEqual(req.status, Request.Status.PENDING)
+
+    def test_user_with_additional_director_role_can_approve_request_via_legacy_endpoint(self):
+        approver = User.objects.create_user(
+            username='hybrid-approver',
+            email='hybrid-approver@example.com',
+            password='StrongPass1',
+            role=User.Role.ADMIN,
+            is_staff=True,
+        )
+        director_role = RoleDefinition.objects.get(key=User.Role.DIRECTOR)
+        UserRole.objects.create(user=approver, role=director_role, created_by=self.admin)
+
+        req = Request.objects.create(
+            applicant_name='Hybrid Request',
+            applicant_email='hybrid-request@example.com',
+            applicant_phone='0712345678',
+            address='Nairobi',
+            category=Request.Category.OTHER,
+            description='Hybrid approval authorization check',
+            amount_requested=3500,
+            created_by=self.admin,
+        )
+
+        client = Client()
+        client.force_login(approver)
+        response = client.post(
+            reverse('approve_request_ajax'),
+            data=json.dumps({'request_id': str(req.id), 'approved_amount': 1500, 'notes': 'Approved via additional role'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        req.refresh_from_db()
+        self.assertEqual(req.status, Request.Status.APPROVED)
+        self.assertEqual(float(req.approved_amount), 1500)
+
+    def test_rbac_update_rejects_policy_bound_permission_changes(self):
+        client = Client()
+        client.force_login(self.admin)
+
+        role_auditor = RoleDefinition.objects.get(key=User.Role.AUDITOR)
+        current_auditor_keys = sorted(
+            RolePermission.objects.filter(role=role_auditor).values_list('permission__key', flat=True)
+        )
+        response = client.put(
+            reverse('api_rbac_update_role', args=[User.Role.AUDITOR]),
+            data=json.dumps({'permission_keys': sorted(set(current_auditor_keys) | {'audit:view'})}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('audit:view cannot be assigned to role auditor', response.json()['error'])
+
+        role_director = RoleDefinition.objects.get(key=User.Role.DIRECTOR)
+        current_director_keys = sorted(
+            RolePermission.objects.filter(role=role_director).values_list('permission__key', flat=True)
+        )
+        response = client.put(
+            reverse('api_rbac_update_role', args=[User.Role.DIRECTOR]),
+            data=json.dumps({'permission_keys': [key for key in current_director_keys if key != 'request:approve']}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('request:approve is fixed by policy for role director', response.json()['error'])
+
+    def test_rbac_update_preserves_critical_management_access(self):
+        client = Client()
+        client.force_login(self.admin)
+
+        role_admin = RoleDefinition.objects.get(key=User.Role.ADMIN)
+        current_admin_keys = sorted(
+            RolePermission.objects.filter(role=role_admin).values_list('permission__key', flat=True)
+        )
+        response = client.put(
+            reverse('api_rbac_update_role', args=[User.Role.ADMIN]),
+            data=json.dumps({'permission_keys': [key for key in current_admin_keys if key != 'rbac:manage']}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Cannot remove rbac:manage', response.json()['error'])

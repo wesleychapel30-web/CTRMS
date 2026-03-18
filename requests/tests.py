@@ -8,7 +8,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from requests.models import Request, RequestDocument
-from core.models import NotificationReceipt, Permission, RoleDefinition, RolePermission, UserRole
+from core.models import NotificationReceipt, Permission, RecordTimelineEntry, RoleDefinition, RolePermission, UserRole
 from core.rbac_defaults import seed_rbac_defaults
 
 
@@ -600,3 +600,69 @@ class RequestWorkflowTests(TestCase):
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_request_detail_includes_timeline_entries_and_hides_internal_notes_from_staff(self):
+        director = User.objects.create_user(
+            username='timeline-director',
+            password='StrongPass1',
+            email='timeline-director@example.com',
+            role=User.Role.DIRECTOR,
+            is_staff=True,
+        )
+        staff_owner = User.objects.create_user(
+            username='timeline-staff-owner',
+            password='StrongPass1',
+            email='timeline-staff-owner@example.com',
+            role=User.Role.STAFF,
+            is_staff=False,
+        )
+        request_obj = Request.objects.create(
+            applicant_name='Timeline Request',
+            applicant_email='timeline-request@example.com',
+            applicant_phone='0700000103',
+            applicant_id='ID-403',
+            address='Morogoro',
+            category=Request.Category.OTHER,
+            description='Timeline coverage',
+            amount_requested=5000,
+            status=Request.Status.UNDER_REVIEW,
+            created_by=staff_owner,
+        )
+
+        director_client = Client()
+        director_client.force_login(director)
+
+        approve_response = director_client.post(
+            reverse('request-approve-request', args=[request_obj.pk]),
+            json.dumps({'approved_amount': '4200', 'review_notes': 'Approved with adjustment'}),
+            content_type='application/json',
+        )
+        self.assertEqual(approve_response.status_code, 200)
+
+        note_response = director_client.post(
+            reverse('request-timeline-entries', args=[request_obj.pk]),
+            json.dumps({'mode': 'internal_note', 'body': 'Director-only internal note'}),
+            content_type='application/json',
+        )
+        self.assertEqual(note_response.status_code, 201)
+        self.assertTrue(
+            RecordTimelineEntry.objects.filter(
+                request=request_obj,
+                entry_type=RecordTimelineEntry.EntryType.INTERNAL_NOTE,
+                is_internal=True,
+            ).exists()
+        )
+
+        detail_response = director_client.get(reverse('request-detail', args=[request_obj.pk]))
+        self.assertEqual(detail_response.status_code, 200)
+        director_entries = detail_response.json().get('timeline_entries', [])
+        self.assertTrue(any(entry['entry_type'] == 'approval_action' for entry in director_entries))
+        self.assertTrue(any(entry['entry_type'] == 'internal_note' for entry in director_entries))
+
+        staff_client = Client()
+        staff_client.force_login(staff_owner)
+        staff_detail_response = staff_client.get(reverse('request-detail', args=[request_obj.pk]))
+        self.assertEqual(staff_detail_response.status_code, 200)
+        staff_entries = staff_detail_response.json().get('timeline_entries', [])
+        self.assertTrue(any(entry['entry_type'] == 'approval_action' for entry in staff_entries))
+        self.assertFalse(any(entry['entry_type'] == 'internal_note' for entry in staff_entries))

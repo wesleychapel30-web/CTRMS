@@ -27,7 +27,7 @@ const ROUTE_PERMISSIONS = {
   invitationDetails: ["invitation:view_all", "invitation:view_own"],
   calendar: ["invitation:view_all", "invitation:view_own"],
   reports: ["report:view"],
-  admin: ["user:manage"],
+  admin: ["user:manage", "rbac:manage"],
   payments: ["payment:view", "payment:record"],
   documents: ["document:view_all", "document:view_own"],
   activity: ["audit:view"],

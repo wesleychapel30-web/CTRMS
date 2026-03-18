@@ -10,6 +10,7 @@ from .models import Request, RequestDocument, RequestHistory
 from core.models import AuditLog, User
 from core.notification_center import NotificationPayload, get_recipients_for_roles, notify_users
 from core.rbac import drf_any_permission_required, drf_permission_required, user_has_permission, user_has_role
+from core.timeline import can_compose_timeline_entry, create_record_comment, create_request_timeline_entry
 from .services import suggest_request_category
 from .serializers import (
     RequestSerializer, RequestCreateUpdateSerializer,
@@ -159,6 +160,8 @@ class RequestViewSet(viewsets.ModelViewSet):
             extra = [drf_permission_required("payment:record")]
         elif self.action == "upload_document":
             extra = [drf_any_permission_required(["request:upload_all", "request:upload_own"])]
+        elif self.action == "timeline_entries":
+            extra = [drf_any_permission_required(["request:view_all", "request:view_own", "request:update_all", "request:update_own", "request:approve", "request:reject"])]
         elif self.action == "cancel":
             extra = [drf_permission_required("request:cancel")]
         elif self.action == "restore":
@@ -217,6 +220,13 @@ class RequestViewSet(viewsets.ModelViewSet):
             performed_by=request.user,
             to_status=request_obj.status,
         )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="system_event",
+            actor=request.user,
+            title="Request created",
+            new_status=request_obj.status,
+        )
 
         if request_obj.status == Request.Status.DRAFT:
             if request_obj.created_by and request_obj.created_by.is_active:
@@ -237,6 +247,14 @@ class RequestViewSet(viewsets.ModelViewSet):
                 performed_by=request.user,
                 from_status=Request.Status.DRAFT,
                 to_status=request_obj.status,
+            )
+            create_request_timeline_entry(
+                request_obj=request_obj,
+                entry_type="status_change",
+                actor=request.user,
+                title="Request submitted",
+                old_status=Request.Status.DRAFT,
+                new_status=request_obj.status,
             )
             notify_users(
                 recipients=get_recipients_for_roles([User.Role.DIRECTOR]),
@@ -331,6 +349,14 @@ class RequestViewSet(viewsets.ModelViewSet):
             from_status=before_status,
             to_status=Request.Status.PENDING,
         )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="status_change",
+            actor=request.user,
+            title="Request submitted",
+            old_status=before_status,
+            new_status=Request.Status.PENDING,
+        )
 
         AuditLog.objects.create(
             user=request.user,
@@ -384,6 +410,15 @@ class RequestViewSet(viewsets.ModelViewSet):
             to_status=Request.Status.UNDER_REVIEW,
             comment=(request.data.get("comment") or "").strip(),
         )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="status_change",
+            actor=request.user,
+            title="Request moved to under review",
+            body=(request.data.get("comment") or "").strip(),
+            old_status=before_status,
+            new_status=Request.Status.UNDER_REVIEW,
+        )
 
         AuditLog.objects.create(
             user=request.user,
@@ -435,6 +470,15 @@ class RequestViewSet(viewsets.ModelViewSet):
             from_status=before_status,
             to_status=Request.Status.APPROVED,
             comment=(request.data.get("review_notes") or "").strip(),
+        )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="approval_action",
+            actor=request.user,
+            title="Request approved",
+            body=(request.data.get("review_notes") or "").strip(),
+            old_status=before_status,
+            new_status=Request.Status.APPROVED,
         )
 
         AuditLog.objects.create(
@@ -497,6 +541,15 @@ class RequestViewSet(viewsets.ModelViewSet):
             from_status=before_status,
             to_status=Request.Status.REJECTED,
             comment=(request.data.get("review_notes") or "").strip(),
+        )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="approval_action",
+            actor=request.user,
+            title="Request rejected",
+            body=(request.data.get("review_notes") or "").strip(),
+            old_status=before_status,
+            new_status=Request.Status.REJECTED,
         )
 
         AuditLog.objects.create(
@@ -566,6 +619,18 @@ class RequestViewSet(viewsets.ModelViewSet):
                 f"Payment recorded: amount={disbursed_amount}, method={request_obj.payment_method or 'N/A'}, "
                 f"reference={request_obj.payment_reference or 'N/A'}."
             ),
+        )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="payment_action",
+            actor=request.user,
+            title="Payment recorded",
+            body=(
+                f"Payment recorded: amount={disbursed_amount}, method={request_obj.payment_method or 'N/A'}, "
+                f"reference={request_obj.payment_reference or 'N/A'}."
+            ),
+            old_status=before_status,
+            new_status=target_status,
         )
 
         AuditLog.objects.create(
@@ -647,6 +712,15 @@ class RequestViewSet(viewsets.ModelViewSet):
             to_status=target_status,
             comment=f"Added payment: amount={payment_amount}.",
         )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="payment_action",
+            actor=request.user,
+            title="Payment recorded",
+            body=f"Added payment: amount={payment_amount}.",
+            old_status=before_status,
+            new_status=target_status,
+        )
 
         AuditLog.objects.create(
             user=request.user,
@@ -714,6 +788,15 @@ class RequestViewSet(viewsets.ModelViewSet):
             to_status=Request.Status.PAID,
             comment=f"Marked payment completed with disbursed amount {final_disbursed}.",
         )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="payment_action",
+            actor=request.user,
+            title="Payment completed",
+            body=f"Marked payment completed with disbursed amount {final_disbursed}.",
+            old_status=before_status,
+            new_status=Request.Status.PAID,
+        )
 
         AuditLog.objects.create(
             user=request.user,
@@ -758,6 +841,16 @@ class RequestViewSet(viewsets.ModelViewSet):
             to_status=Request.Status.CANCELLED,
             comment=(request.data.get("comment") or "").strip(),
         )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="status_change",
+            actor=request.user,
+            title="Request cancelled",
+            body=(request.data.get("comment") or "").strip(),
+            old_status=before_status,
+            new_status=Request.Status.CANCELLED,
+            is_internal=True,
+        )
 
         AuditLog.objects.create(
             user=request.user,
@@ -799,6 +892,16 @@ class RequestViewSet(viewsets.ModelViewSet):
             from_status=before_status,
             to_status=Request.Status.PENDING,
             comment=(request.data.get("comment") or "").strip(),
+        )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="status_change",
+            actor=request.user,
+            title="Request restored",
+            body=(request.data.get("comment") or "").strip(),
+            old_status=before_status,
+            new_status=Request.Status.PENDING,
+            is_internal=True,
         )
 
         AuditLog.objects.create(
@@ -857,6 +960,15 @@ class RequestViewSet(viewsets.ModelViewSet):
             to_status=Request.Status.UNDER_REVIEW,
             comment=reason,
         )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="revert_action",
+            actor=request.user,
+            title="Decision reverted",
+            body=reason,
+            old_status=before_status,
+            new_status=Request.Status.UNDER_REVIEW,
+        )
 
         AuditLog.objects.create(
             user=request.user,
@@ -882,6 +994,38 @@ class RequestViewSet(viewsets.ModelViewSet):
         )
 
         return Response(RequestSerializer(request_obj, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"])
+    def timeline_entries(self, request, pk=None):
+        """Add a persistent chatter entry for this request."""
+        request_obj = self.get_object()
+        if not can_compose_timeline_entry(request.user):
+            return Response({'error': 'Only Directors or Administrators can add notes to the request history.'}, status=status.HTTP_403_FORBIDDEN)
+
+        mode = (request.data.get("mode") or "comment").strip().lower()
+        body = (request.data.get("body") or request.data.get("comment") or "").strip()
+        if not body:
+            return Response({'error': 'Comment body is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_internal = mode == "internal_note"
+        entry = create_record_comment(
+            request_obj=request_obj,
+            actor=request.user,
+            body=body,
+            internal=is_internal,
+        )
+        if not entry:
+            return Response({'error': 'Unable to create timeline entry.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        AuditLog.objects.create(
+            user=request.user,
+            action_type=AuditLog.ActionType.UPDATE,
+            content_type="Request",
+            object_id=str(request_obj.id),
+            description=f"Added {'internal note' if is_internal else 'comment'} to request {request_obj.request_id}.",
+        )
+
+        return Response(RequestSerializer(request_obj, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"])
     def suggest_category(self, request):
@@ -1008,6 +1152,15 @@ class RequestViewSet(viewsets.ModelViewSet):
             comment=f"Uploaded document: {document_type}",
             from_status=request_obj.status,
             to_status=request_obj.status,
+        )
+        create_request_timeline_entry(
+            request_obj=request_obj,
+            entry_type="system_event",
+            actor=request.user,
+            title="Document uploaded",
+            body=f"Uploaded document: {document_type}",
+            old_status=request_obj.status,
+            new_status=request_obj.status,
         )
 
         return Response(RequestDocumentSerializer(doc, context={"request": request}).data, status=status.HTTP_201_CREATED)

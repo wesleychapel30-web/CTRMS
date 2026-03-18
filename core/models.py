@@ -250,6 +250,73 @@ class AuditLog(models.Model):
     def __str__(self):
         return f"{self.user} - {self.get_action_type_display()} on {self.content_type}"
 
+
+class RecordTimelineEntry(models.Model):
+    """Persistent chatter/timeline entries for request and invitation records."""
+
+    class EntryType(models.TextChoices):
+        STATUS_CHANGE = 'status_change', _('Status Change')
+        INTERNAL_NOTE = 'internal_note', _('Internal Note')
+        DIRECTOR_COMMENT = 'director_comment', _('Director Comment')
+        ADMIN_NOTE = 'admin_note', _('Admin Note')
+        APPROVAL_ACTION = 'approval_action', _('Approval Action')
+        REVERT_ACTION = 'revert_action', _('Revert Action')
+        PAYMENT_ACTION = 'payment_action', _('Payment Action')
+        SYSTEM_EVENT = 'system_event', _('System Event')
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request = models.ForeignKey(
+        'requests.Request',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='timeline_entries',
+    )
+    invitation = models.ForeignKey(
+        'invitations.Invitation',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='timeline_entries',
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='record_timeline_entries',
+    )
+    entry_type = models.CharField(max_length=40, choices=EntryType.choices, db_index=True)
+    title = models.CharField(max_length=255)
+    body = models.TextField(blank=True)
+    old_status = models.CharField(max_length=60, blank=True)
+    new_status = models.CharField(max_length=60, blank=True)
+    is_internal = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'record_timeline_entry'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['request', '-created_at']),
+            models.Index(fields=['invitation', '-created_at']),
+            models.Index(fields=['entry_type', '-created_at']),
+            models.Index(fields=['is_internal', '-created_at']),
+        ]
+
+    def clean(self):
+        super().clean()
+        if bool(self.request_id) == bool(self.invitation_id):
+            raise ValidationError("Timeline entry must be linked to exactly one record.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        target = self.request_id or self.invitation_id or 'unknown'
+        return f"{self.entry_type} on {target}"
+
 # Import auth models so they're registered with Django
 from django.conf import settings
 import secrets

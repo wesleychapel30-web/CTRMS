@@ -3,11 +3,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { AttachmentPreviewPanel } from "../components/AttachmentPreviewPanel";
 import { DetailSectionCard } from "../components/DetailSectionCard";
+import { RecordChatter } from "../components/RecordChatter";
 import { SectionCard } from "../components/SectionCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useSession } from "../context/SessionContext";
+import { useToast } from "../context/ToastContext";
 import {
   acceptInvitation,
+  addInvitationTimelineEntry,
   confirmInvitationAttendance,
   declineInvitation,
   fetchInvitation,
@@ -22,15 +25,17 @@ type InvitationDecisionAction = "accept" | "decline" | "confirm" | "revert";
 
 export function InvitationDetailsPage() {
   const { invitationId } = useParams();
-  const { user, hasPermission } = useSession();
+  const { hasPermission, hasRole } = useSession();
+  const toast = useToast();
   const [record, setRecord] = useState<InvitationRecord | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [attachmentType, setAttachmentType] = useState("Supporting Document");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [previewFile, setPreviewFile] = useState<{ title: string; fileName?: string; fileUrl: string } | null>(null);
   const [pendingDecisionAction, setPendingDecisionAction] = useState<InvitationDecisionAction | null>(null);
   const [isDecisionSubmitting, setIsDecisionSubmitting] = useState(false);
+  const [isTimelineSubmitting, setIsTimelineSubmitting] = useState(false);
 
   const loadInvitation = async () => {
     if (!invitationId) {
@@ -38,10 +43,11 @@ export function InvitationDetailsPage() {
     }
     try {
       const data = await fetchInvitation(invitationId);
+      setLoadError(null);
       setRecord(data);
       setNotes(data.review_notes ?? "");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to load invitation");
+      setLoadError(reason instanceof Error ? reason.message : "Unable to load invitation");
     }
   };
 
@@ -49,15 +55,15 @@ export function InvitationDetailsPage() {
     void loadInvitation();
   }, [invitationId]);
 
-  if (error) {
-    return <SectionCard title="Invitation Details">{error}</SectionCard>;
+  if (loadError) {
+    return <SectionCard title="Invitation Details">{loadError}</SectionCard>;
   }
 
   if (!record) {
     return <SectionCard title="Invitation Details">Loading invitation...</SectionCard>;
   }
 
-  const isDirector = user?.role === "director";
+  const isDirector = hasRole("director");
   const canAccept = isDirector && hasPermission("invitation:accept");
   const canDecline = isDirector && hasPermission("invitation:decline");
   const canConfirm = isDirector && hasPermission("invitation:confirm");
@@ -70,9 +76,16 @@ export function InvitationDetailsPage() {
   const showConfirm = canConfirm && decisionVisibility.showConfirm;
   const showRevert = canRevert && decisionVisibility.showRevert;
   const showFinalDecisionMessage = decisionVisibility.isFinal && !showRevert;
+  const canComposeTimeline = hasRole("director") || hasRole("admin");
+
+  const successMessages: Record<InvitationDecisionAction, { title: string; message: string }> = {
+    accept: { title: "Invitation accepted", message: "Invitation accepted successfully." },
+    decline: { title: "Invitation declined", message: "Invitation declined successfully." },
+    confirm: { title: "Attendance confirmed", message: "Attendance confirmed successfully." },
+    revert: { title: "Decision reverted", message: "Invitation decision reverted successfully." },
+  };
 
   const runDecisionAction = async (action: InvitationDecisionAction) => {
-    setError(null);
     setIsDecisionSubmitting(true);
     try {
       if (action === "accept") {
@@ -85,11 +98,30 @@ export function InvitationDetailsPage() {
         await revertInvitationDecision(record.id, notes);
       }
       await loadInvitation();
+      const success = successMessages[action];
+      toast.success(success.message, success.title);
       setPendingDecisionAction(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to update invitation decision");
+      toast.error(reason instanceof Error ? reason.message : "Unable to update invitation decision");
     } finally {
       setIsDecisionSubmitting(false);
+    }
+  };
+
+  const submitTimelineEntry = async (payload: { mode: "comment" | "internal_note"; body: string }) => {
+    setIsTimelineSubmitting(true);
+    try {
+      await addInvitationTimelineEntry(record.id, payload);
+      await loadInvitation();
+      toast.success(
+        payload.mode === "internal_note" ? "Internal note saved." : "Comment added successfully.",
+        payload.mode === "internal_note" ? "Note saved" : "Comment added"
+      );
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : "Unable to save note");
+      throw reason;
+    } finally {
+      setIsTimelineSubmitting(false);
     }
   };
 
@@ -150,6 +182,19 @@ export function InvitationDetailsPage() {
               <p className="text-sm text-slate-500">No attachments uploaded yet.</p>
             )}
           </div>
+        </DetailSectionCard>
+
+        <DetailSectionCard title="Record Timeline" subtitle="Comments, approvals, status changes, and workflow notes.">
+          <RecordChatter
+            title="Record History"
+            subtitle="Permanent comments and workflow events for this invitation."
+            entries={record.timeline_entries ?? []}
+            emptyMessage="No invitation history is available yet."
+            canAddComment={canComposeTimeline}
+            canAddInternalNote={canComposeTimeline}
+            isSubmitting={isTimelineSubmitting}
+            onSubmit={submitTimelineEntry}
+          />
         </DetailSectionCard>
       </div>
 
@@ -223,7 +268,16 @@ export function InvitationDetailsPage() {
               <input value={attachmentType} onChange={(event) => setAttachmentType(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none dark:border-white/10 dark:bg-white/5" />
               <input onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} type="file" className="w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 outline-none dark:border-white/10 dark:bg-white/5" />
               <button
-                onClick={() => attachment && void uploadInvitationAttachment(record.id, attachment, attachmentType).then(loadInvitation).catch((reason) => setError(reason.message))}
+                onClick={() =>
+                  attachment &&
+                  void uploadInvitationAttachment(record.id, attachment, attachmentType)
+                    .then(() => loadInvitation())
+                    .then(() => {
+                      toast.success("Attachment uploaded successfully.", "Attachment added");
+                      setAttachment(null);
+                    })
+                    .catch((reason) => toast.error(reason instanceof Error ? reason.message : "Upload failed"))
+                }
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold dark:border-white/10"
               >
                 Upload Attachment

@@ -21,6 +21,6 @@ export const navItems: NavItem[] = [
   { label: "Reports", href: "/reports", icon: FileText, group: "Finance & Reporting", requires: ["report:view"] },
   { label: "Documents", href: "/documents", icon: FileText, group: "Records", requires: ["document:view_all", "document:view_own"] },
   { label: "Activity Logs", href: "/activity", icon: Activity, group: "Records", requires: ["audit:view"] },
-  { label: "Administration Panel", href: "/admin", icon: Users, group: "Administration", requires: ["user:manage"] },
+  { label: "Administration Panel", href: "/admin", icon: Users, group: "Administration", requires: ["user:manage", "rbac:manage"] },
   { label: "System Settings", href: "/settings", icon: Settings, group: "Administration", requires: ["settings:update", "profile:change_password"] }
 ];

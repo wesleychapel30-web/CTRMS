@@ -7,7 +7,7 @@ type SessionContextValue = {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: (options?: { silent?: boolean }) => Promise<void>;
   hasPermission: (key: string) => boolean;
   hasAnyPermission: (keys: string[]) => boolean;
   hasRole: (key: string) => boolean;
@@ -19,13 +19,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const refresh = async () => {
-    setIsLoading(true);
+  const refresh = async (options?: { silent?: boolean }) => {
+    const shouldShowGlobalLoader = !options?.silent;
+    if (shouldShowGlobalLoader) {
+      setIsLoading(true);
+    }
     try {
       const session = await fetchSession();
       setUser(session.user);
     } finally {
-      setIsLoading(false);
+      if (shouldShowGlobalLoader) {
+        setIsLoading(false);
+      }
     }
   };
 

@@ -20,8 +20,8 @@ def _ensure_rbac_seeded() -> None:
     if _seed_attempted:
         return
     try:
-        # Seed lazily and idempotently so new default permissions/role mappings are applied
-        # on existing environments without requiring a manual bootstrap command.
+        # Seed lazily and idempotently so default roles, permissions, and policy-bound
+        # mappings exist without overwriting customized role-permission assignments.
         from core.rbac_defaults import seed_rbac_defaults
 
         seed_rbac_defaults()
@@ -75,11 +75,18 @@ def get_user_role_keys(user: User) -> set[str]:
     keys = {(getattr(user, "role", "") or "").strip()}
     if getattr(user, "pk", None):
         try:
-            keys.update(
-                UserRole.objects.filter(user=user)
-                .select_related("role")
-                .values_list("role__key", flat=True)
-            )
+            prefetched = getattr(user, "_prefetched_objects_cache", {}).get("role_assignments")
+            if prefetched is not None:
+                keys.update(
+                    (getattr(getattr(assignment, "role", None), "key", "") or "").strip()
+                    for assignment in prefetched
+                )
+            else:
+                keys.update(
+                    UserRole.objects.filter(user=user)
+                    .select_related("role")
+                    .values_list("role__key", flat=True)
+                )
         except Exception:
             # UserRole table may not exist yet before migrations.
             pass

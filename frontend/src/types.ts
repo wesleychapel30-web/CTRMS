@@ -79,6 +79,19 @@ export type RequestHistoryRecord = {
   created_at: string;
 };
 
+export type RecordTimelineEntryRecord = {
+  id: string;
+  entry_type: string;
+  label: string;
+  actor_name: string;
+  title: string;
+  body: string;
+  old_status: string;
+  new_status: string;
+  is_internal: boolean;
+  created_at: string;
+};
+
 export type RequestRecord = {
   id: string;
   request_id: string;
@@ -112,6 +125,7 @@ export type RequestRecord = {
   created_by_name?: string;
   documents: RequestDocumentRecord[];
   history?: RequestHistoryRecord[];
+  timeline_entries?: RecordTimelineEntryRecord[];
   created_at: string;
   updated_at: string;
 };
@@ -125,6 +139,19 @@ export type InvitationAttachmentRecord = {
   uploaded_by: string | null;
   uploaded_by_name?: string;
   uploaded_at: string;
+};
+
+export type InvitationHistoryRecord = {
+  id: string;
+  action_type: string;
+  action_label: string;
+  label: string;
+  actor_name: string;
+  description: string;
+  comment: string;
+  from_status?: string;
+  to_status?: string;
+  created_at: string;
 };
 
 export type InvitationRecord = {
@@ -150,6 +177,8 @@ export type InvitationRecord = {
   reminder_3_days_sent: boolean;
   reminder_1_day_sent: boolean;
   attachments: InvitationAttachmentRecord[];
+  history?: InvitationHistoryRecord[];
+  timeline_entries?: RecordTimelineEntryRecord[];
   is_upcoming: boolean;
   created_at: string;
   updated_at: string;

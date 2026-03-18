@@ -159,12 +159,65 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
 }
 
 
+POLICY_BOUND_PERMISSIONS: dict[str, dict[str, object]] = {
+    "request:approve": {
+        "allowed_roles": (User.Role.DIRECTOR,),
+        "reason": "Only Directors can approve requests.",
+    },
+    "request:reject": {
+        "allowed_roles": (User.Role.DIRECTOR,),
+        "reason": "Only Directors can reject requests.",
+    },
+    "audit:view": {
+        "allowed_roles": (User.Role.ADMIN, User.Role.DIRECTOR),
+        "reason": "Activity logs are restricted to Administrators and Directors.",
+    },
+}
+
+CRITICAL_PERMISSION_KEYS = {
+    "rbac:manage",
+    "user:manage",
+}
+
+
+def get_policy_bound_permissions() -> dict[str, dict[str, object]]:
+    return {
+        key: {
+            "allowed_roles": list(rule["allowed_roles"]),
+            "reason": str(rule["reason"]),
+        }
+        for key, rule in POLICY_BOUND_PERMISSIONS.items()
+    }
+
+
+def _sync_policy_bound_permissions(
+    role_map: dict[str, RoleDefinition],
+    perm_map: dict[str, Permission],
+) -> None:
+    for permission_key, rule in POLICY_BOUND_PERMISSIONS.items():
+        permission = perm_map.get(permission_key)
+        if not permission:
+            continue
+        allowed_roles = set(rule["allowed_roles"])
+        for role_key, role in role_map.items():
+            queryset = RolePermission.objects.filter(role=role, permission=permission)
+            if role_key in allowed_roles:
+                queryset.get_or_create(role=role, permission=permission)
+            else:
+                queryset.delete()
+
+
 @transaction.atomic
-def seed_rbac_defaults() -> None:
-    """Idempotently ensure RBAC defaults exist in DB."""
+def seed_rbac_defaults(*, sync_role_permissions: bool = False) -> None:
+    """Idempotently ensure RBAC defaults exist in DB.
+
+    Non-policy mappings are treated as customizable. They are only auto-seeded when
+    a built-in role is first created or when an explicit sync is requested.
+    """
     role_map: dict[str, RoleDefinition] = {}
+    created_role_keys: set[str] = set()
     for key, name, description in DEFAULT_ROLES:
-        role, _created = RoleDefinition.objects.get_or_create(
+        role, created = RoleDefinition.objects.get_or_create(
             key=key,
             defaults={"name": name, "description": description},
         )
@@ -173,6 +226,8 @@ def seed_rbac_defaults() -> None:
             role.description = description
             role.save(update_fields=["name", "description"])
         role_map[key] = role
+        if created:
+            created_role_keys.add(key)
 
     perm_map: dict[str, Permission] = {}
     for key, name, description, module in DEFAULT_PERMISSIONS:
@@ -191,11 +246,15 @@ def seed_rbac_defaults() -> None:
         role = role_map.get(role_key)
         if not role:
             continue
+        if not (sync_role_permissions or role_key in created_role_keys):
+            continue
         for perm_key in permission_keys:
             perm = perm_map.get(perm_key)
             if not perm:
                 continue
             RolePermission.objects.get_or_create(role=role, permission=perm)
+
+    _sync_policy_bound_permissions(role_map, perm_map)
 
     # Ensure role rows exist for every declared User.Role so permission checks don't crash.
     for legacy_role in [choice[0] for choice in User.Role.choices]:

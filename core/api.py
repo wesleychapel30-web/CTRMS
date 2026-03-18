@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.db import transaction
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Prefetch
 from django.utils import timezone
 from django.urls import reverse
 from requests.models import Request
@@ -22,6 +22,7 @@ from core.models import (
     RolePermission,
     ROLE_LIMITS,
     User,
+    UserRole,
     active_user_count_for_role,
 )
 from core.notification_center import NotificationPayload, get_recipients_for_roles, mark_receipt_read, notify_users
@@ -34,6 +35,7 @@ from core.rbac import (
     user_has_role,
     user_has_permission,
 )
+from core.rbac_defaults import CRITICAL_PERMISSION_KEYS, get_policy_bound_permissions
 from core.rbac_service import get_user_additional_role_keys, sync_user_roles
 from common.models import OrganizationSettings, SystemSettings
 import json
@@ -51,6 +53,65 @@ ACTIONABLE_NOTIFICATION_TITLES = {
     "Event reminder",
     "Overdue item",
 }
+
+POLICY_BOUND_PERMISSIONS = get_policy_bound_permissions()
+
+
+def _policy_allowed_roles(permission_key: str) -> set[str]:
+    rule = POLICY_BOUND_PERMISSIONS.get(permission_key) or {}
+    return set(rule.get("allowed_roles") or [])
+
+
+def _policy_violation_messages(role_key: str, desired_keys: set[str]) -> list[str]:
+    messages: list[str] = []
+    for permission_key, rule in POLICY_BOUND_PERMISSIONS.items():
+        allowed_roles = set(rule.get("allowed_roles") or [])
+        reason = str(rule.get("reason") or "This permission is fixed by policy.")
+        if role_key in allowed_roles and permission_key not in desired_keys:
+            messages.append(f"{permission_key} is fixed by policy for role {role_key}. {reason}")
+        if role_key not in allowed_roles and permission_key in desired_keys:
+            messages.append(f"{permission_key} cannot be assigned to role {role_key}. {reason}")
+    return messages
+
+
+def _active_users_retaining_permission_after_role_update(
+    *,
+    role_key: str,
+    permission_key: str,
+    desired_keys: set[str],
+) -> int:
+    active_users = User.objects.filter(is_active=True, is_archived=False).prefetch_related(
+        Prefetch("role_assignments", queryset=UserRole.objects.select_related("role"))
+    )
+
+    current_mapping: dict[str, set[str]] = {}
+    for assigned_role_key, permission_keys in (
+        RolePermission.objects.select_related("role", "permission")
+        .values_list("role__key", "permission__key")
+    ):
+        current_mapping.setdefault(assigned_role_key, set()).add(permission_keys)
+
+    count = 0
+    for user in active_users:
+        if getattr(user, "is_superuser", False):
+            count += 1
+            continue
+
+        role_keys = get_user_role_keys(user)
+        if not role_keys:
+            continue
+
+        user_permission_keys: set[str] = set()
+        for assigned_role_key in role_keys:
+            if assigned_role_key == role_key:
+                user_permission_keys.update(desired_keys)
+            else:
+                user_permission_keys.update(current_mapping.get(assigned_role_key, set()))
+
+        if permission_key in user_permission_keys:
+            count += 1
+
+    return count
 
 
 def _notification_receipts_queryset_for_user(user):
@@ -136,7 +197,7 @@ def approve_request_ajax(request):
     Directors only
     """
     try:
-        if getattr(request.user, "role", None) != User.Role.DIRECTOR:
+        if not user_has_role(request.user, User.Role.DIRECTOR):
             return JsonResponse({'success': False, 'error': 'Only Directors can approve requests.'}, status=403)
         data = json.loads(request.body)
         request_uuid = data.get('request_id')
@@ -150,7 +211,13 @@ def approve_request_ajax(request):
             return JsonResponse({'success': False, 'error': 'Request cannot be approved in current status'}, status=400)
         
         # Update request
-        approved_amount = float(data.get('approved_amount', req_obj.amount_requested))
+        approved_amount_raw = data.get('approved_amount', req_obj.amount_requested)
+        try:
+            approved_amount = Decimal(str(approved_amount_raw))
+        except (InvalidOperation, TypeError):
+            return JsonResponse({'success': False, 'error': 'Approved amount must be a valid number'}, status=400)
+        if approved_amount < 0:
+            return JsonResponse({'success': False, 'error': 'Approved amount must be 0 or greater'}, status=400)
         req_obj.approved_amount = approved_amount
         req_obj.reviewed_by = request.user
         req_obj.status = Request.Status.APPROVED
@@ -187,7 +254,7 @@ def reject_request_ajax(request):
     Directors only
     """
     try:
-        if getattr(request.user, "role", None) != User.Role.DIRECTOR:
+        if not user_has_role(request.user, User.Role.DIRECTOR):
             return JsonResponse({'success': False, 'error': 'Only Directors can reject requests.'}, status=403)
         data = json.loads(request.body)
         request_uuid = data.get('request_id')
@@ -827,7 +894,16 @@ def get_user_management_data(request):
         return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
 
     users = []
-    for user in User.objects.order_by('-created_at'):
+    user_queryset = (
+        User.objects.order_by('-created_at')
+        .prefetch_related(
+            Prefetch(
+                'role_assignments',
+                queryset=UserRole.objects.select_related('role'),
+            )
+        )
+    )
+    for user in user_queryset:
         role_keys = sorted(get_user_role_keys(user))
         users.append(
             {
@@ -844,6 +920,7 @@ def get_user_management_data(request):
                 'is_active_staff': getattr(user, "is_active_staff", True),
                 'is_archived': getattr(user, "is_archived", False),
                 'force_password_change': getattr(user, "force_password_change", False),
+                'last_login': user.last_login.isoformat() if user.last_login else None,
             }
         )
     summary = {
@@ -1716,7 +1793,15 @@ def get_rbac_overview_api(request):
     for role_key in mapping:
         mapping[role_key] = sorted(set(mapping[role_key]))
 
-    return JsonResponse({"success": True, "roles": roles, "permissions": permissions, "mapping": mapping})
+    return JsonResponse(
+        {
+            "success": True,
+            "roles": roles,
+            "permissions": permissions,
+            "mapping": mapping,
+            "policy_bound_permissions": POLICY_BOUND_PERMISSIONS,
+        }
+    )
 
 
 @login_required
@@ -1739,9 +1824,29 @@ def update_role_permissions_api(request, role_key: str):
         return JsonResponse({"success": False, "error": "permission_keys must be a list"}, status=400)
 
     desired_keys = {str(item).strip() for item in desired if str(item).strip()}
+    policy_messages = _policy_violation_messages(role.key, desired_keys)
+    if policy_messages:
+        return JsonResponse({"success": False, "error": " ".join(policy_messages)}, status=400)
+
     existing_keys = set(
         RolePermission.objects.filter(role=role).select_related("permission").values_list("permission__key", flat=True)
     )
+
+    for permission_key in sorted(CRITICAL_PERMISSION_KEYS):
+        if permission_key in existing_keys and permission_key not in desired_keys:
+            remaining_holders = _active_users_retaining_permission_after_role_update(
+                role_key=role.key,
+                permission_key=permission_key,
+                desired_keys=desired_keys,
+            )
+            if remaining_holders == 0:
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": f"Cannot remove {permission_key}; at least one active user must retain this permission.",
+                    },
+                    status=400,
+                )
 
     to_add = desired_keys - existing_keys
     to_remove = existing_keys - desired_keys
