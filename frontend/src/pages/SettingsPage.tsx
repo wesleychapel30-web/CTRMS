@@ -2,15 +2,25 @@ import { useEffect, useState } from "react";
 import { SectionCard } from "../components/SectionCard";
 import { changeOwnPassword, fetchSystemSettings, sendInvitationReminders, sendTestEmail, updateSystemSettings, uploadOrganizationAssets } from "../lib/api";
 import { useSession } from "../context/SessionContext";
+import { useToast } from "../context/ToastContext";
 import type { SettingsOverview } from "../types";
+
+type AssetUploadResponse = Awaited<ReturnType<typeof uploadOrganizationAssets>>;
+type SettingsResponse = Awaited<ReturnType<typeof fetchSystemSettings>>;
+type TestEmailResponse = Awaited<ReturnType<typeof sendTestEmail>>;
+type ReminderResponse = Awaited<ReturnType<typeof sendInvitationReminders>>;
+
+function getErrorMessage(reason: unknown) {
+  return reason instanceof Error ? reason.message : "Request failed";
+}
 
 export function SettingsPage() {
   const { user, hasPermission, refresh } = useSession();
+  const toast = useToast();
   const [settings, setSettings] = useState<SettingsOverview | null>(null);
   const [draft, setDraft] = useState<SettingsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   const [testEmailRecipient, setTestEmailRecipient] = useState("");
@@ -27,14 +37,14 @@ export function SettingsPage() {
       return;
     }
     fetchSystemSettings()
-      .then((data) => {
+      .then((data: SettingsResponse) => {
         setSettings(data);
         setDraft(data);
         setTestEmailRecipient(
           data.system_settings.sender_email || data.system_settings.support_email || user?.email || ""
         );
       })
-      .catch((reason) => setError(reason.message));
+      .catch((reason: unknown) => setError(getErrorMessage(reason)));
   }, [user?.email, isAdmin]);
 
   if (!isAdmin && !canChangePassword) {
@@ -51,7 +61,6 @@ export function SettingsPage() {
   if (!isAdmin) {
     return (
       <SectionCard title="Settings" subtitle="Update your account password.">
-        {statusMessage ? <p className="mb-3 text-sm text-emerald-700 dark:text-emerald-300">{statusMessage}</p> : null}
         {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
         {forcePasswordChange ? (
           <p className="mb-3 rounded-2xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200">
@@ -91,20 +100,24 @@ export function SettingsPage() {
             onClick={() => {
               if (newPassword !== confirmPassword) {
                 setError("New password and confirmation do not match.");
+                toast.error("New password and confirmation do not match.");
                 return;
               }
               setIsChangingPassword(true);
               setError(null);
-              setStatusMessage(null);
               changeOwnPassword({ current_password: currentPassword, new_password: newPassword })
                 .then(() => refresh())
                 .then(() => {
                   setCurrentPassword("");
                   setNewPassword("");
                   setConfirmPassword("");
-                  setStatusMessage("Password changed successfully.");
+                  toast.success("Password changed successfully.");
                 })
-                .catch((reason) => setError(reason.message))
+                .catch((reason: unknown) => {
+                  const message = getErrorMessage(reason);
+                  setError(message);
+                  toast.error(message);
+                })
                 .finally(() => setIsChangingPassword(false));
             }}
             className="mt-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-blue-500"
@@ -139,7 +152,7 @@ export function SettingsPage() {
                     if (!file) return;
                     setIsUploading(true);
                     uploadOrganizationAssets({ logo: file })
-                      .then((res) => {
+                      .then((res: AssetUploadResponse) => {
                         setDraft((prev) =>
                           prev
                             ? {
@@ -151,9 +164,13 @@ export function SettingsPage() {
                               }
                             : prev
                         );
-                        setStatusMessage("Logo uploaded.");
+                        toast.success("Logo uploaded.");
                       })
-                      .catch((reason) => setError(reason.message))
+                      .catch((reason: unknown) => {
+                        const message = getErrorMessage(reason);
+                        setError(message);
+                        toast.error(message);
+                      })
                       .finally(() => setIsUploading(false));
                   }}
                   className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
@@ -170,7 +187,7 @@ export function SettingsPage() {
                     if (!file) return;
                     setIsUploading(true);
                     uploadOrganizationAssets({ favicon: file })
-                      .then((res) => {
+                      .then((res: AssetUploadResponse) => {
                         setDraft((prev) =>
                           prev
                             ? {
@@ -182,9 +199,13 @@ export function SettingsPage() {
                               }
                             : prev
                         );
-                        setStatusMessage("Favicon uploaded.");
+                        toast.success("Favicon uploaded.");
                       })
-                      .catch((reason) => setError(reason.message))
+                      .catch((reason: unknown) => {
+                        const message = getErrorMessage(reason);
+                        setError(message);
+                        toast.error(message);
+                      })
                       .finally(() => setIsUploading(false));
                   }}
                   className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
@@ -201,7 +222,7 @@ export function SettingsPage() {
                     if (!file) return;
                     setIsUploading(true);
                     uploadOrganizationAssets({ bannerImage: file })
-                      .then((res) => {
+                      .then((res: AssetUploadResponse) => {
                         setDraft((prev) =>
                           prev
                             ? {
@@ -213,9 +234,13 @@ export function SettingsPage() {
                               }
                             : prev
                         );
-                        setStatusMessage("Banner uploaded.");
+                        toast.success("Banner uploaded.");
                       })
-                      .catch((reason) => setError(reason.message))
+                      .catch((reason: unknown) => {
+                        const message = getErrorMessage(reason);
+                        setError(message);
+                        toast.error(message);
+                      })
                       .finally(() => setIsUploading(false));
                   }}
                   className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
@@ -308,7 +333,6 @@ export function SettingsPage() {
             </p>
           ) : null}
 
-          {statusMessage ? <p className="text-sm text-emerald-700 dark:text-emerald-300">{statusMessage}</p> : null}
           {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
           <label className="grid gap-1.5">
@@ -472,11 +496,14 @@ export function SettingsPage() {
                 disabled={!isAdmin || isSendingTestEmail}
                 onClick={() => {
                   setIsSendingTestEmail(true);
-                  setStatusMessage(null);
                   setError(null);
                   sendTestEmail(testEmailRecipient)
-                    .then((result) => setStatusMessage(result.message))
-                    .catch((reason) => setError(reason.message))
+                    .then((result: TestEmailResponse) => toast.success(result.message, "Test email sent"))
+                    .catch((reason: unknown) => {
+                      const message = getErrorMessage(reason);
+                      setError(message);
+                      toast.error(message);
+                    })
                     .finally(() => setIsSendingTestEmail(false));
                 }}
                 className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold disabled:opacity-60 dark:border-white/10"
@@ -608,14 +635,17 @@ export function SettingsPage() {
                   return;
                 }
                 setIsSaving(true);
-                setStatusMessage(null);
                 updateSystemSettings(draft)
-                  .then((data) => {
+                  .then((data: SettingsResponse) => {
                     setSettings(data);
                     setDraft(data);
-                    setStatusMessage("Settings saved.");
+                    toast.success("Settings saved.");
                   })
-                  .catch((reason) => setError(reason.message))
+                  .catch((reason: unknown) => {
+                    const message = getErrorMessage(reason);
+                    setError(message);
+                    toast.error(message);
+                  })
                   .finally(() => setIsSaving(false));
               }}
               className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-blue-500"
@@ -626,8 +656,17 @@ export function SettingsPage() {
               disabled={!isAdmin}
               onClick={() =>
                 void sendInvitationReminders("both")
-                  .then((result) => setStatusMessage(`Reminders queued: ${result["3_day_reminders"]} (3-day), ${result["1_day_reminders"]} (1-day).`))
-                  .catch((reason) => setError(reason.message))
+                  .then((result: ReminderResponse) =>
+                    toast.info(
+                      `Reminders queued: ${result["3_day_reminders"]} for 3-day and ${result["1_day_reminders"]} for 1-day.`,
+                      "Reminders queued"
+                    )
+                  )
+                  .catch((reason: unknown) => {
+                    const message = getErrorMessage(reason);
+                    setError(message);
+                    toast.error(message);
+                  })
               }
               className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold disabled:opacity-60 dark:border-white/10"
             >
@@ -676,20 +715,24 @@ export function SettingsPage() {
             onClick={() => {
               if (newPassword !== confirmPassword) {
                 setError("New password and confirmation do not match.");
+                toast.error("New password and confirmation do not match.");
                 return;
               }
               setIsChangingPassword(true);
               setError(null);
-              setStatusMessage(null);
               changeOwnPassword({ current_password: currentPassword, new_password: newPassword })
                 .then(() => refresh())
                 .then(() => {
                   setCurrentPassword("");
                   setNewPassword("");
                   setConfirmPassword("");
-                  setStatusMessage("Password changed successfully.");
+                  toast.success("Password changed successfully.");
                 })
-                .catch((reason) => setError(reason.message))
+                .catch((reason: unknown) => {
+                  const message = getErrorMessage(reason);
+                  setError(message);
+                  toast.error(message);
+                })
                 .finally(() => setIsChangingPassword(false));
             }}
             className="mt-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-blue-500"
