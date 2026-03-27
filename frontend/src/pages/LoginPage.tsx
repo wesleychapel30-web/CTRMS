@@ -1,9 +1,15 @@
+import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { AuthLayout } from "../components/AuthLayout";
+import { InlineBanner } from "../components/FeedbackStates";
 import { useSession } from "../context/SessionContext";
 import { fetchPublicBranding } from "../lib/api";
 import type { BrandingSettings } from "../types";
+
+function getErrorMessage(reason: unknown) {
+  return reason instanceof Error ? reason.message : "Unable to sign in";
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -42,23 +48,57 @@ export function LoginPage() {
     try {
       await login(username, password);
       navigate("/");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to sign in");
+    } catch (reason: unknown) {
+      setError(getErrorMessage(reason));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <AuthLayout branding={branding} title="Sign In" subtitle="Secure access to the request and invitation management system.">
-      <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Account Access</h2>
-      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{branding?.organization_name ?? "Institution"} users only.</p>
-      <form onSubmit={handleSubmit} className="mt-6 space-y-3">
-        <input value={username} onChange={(event) => setUsername(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" placeholder="Username" />
-        <input value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" placeholder="Password" type="password" />
-        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-        <button disabled={isSubmitting} className="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-cyan-500 dark:text-slate-900">
-          {isSubmitting ? "Signing in..." : "Sign In"}
+    <AuthLayout
+      branding={branding}
+      title="Secure Authentication"
+      subtitle="Enter your institutional credentials to access the request and invitation management terminal."
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <label className="grid gap-2">
+          <span className="section-kicker">Email or terminal ID</span>
+          <input
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            className="institutional-input w-full rounded-md px-4 py-3.5 text-[var(--ink)] outline-none"
+            placeholder="name@organization.com"
+          />
+        </label>
+
+        <label className="grid gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="section-kicker">Password</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Protected access</span>
+          </div>
+          <input
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="institutional-input w-full rounded-md px-4 py-3.5 text-[var(--ink)] outline-none"
+            placeholder="Enter your password"
+            type="password"
+          />
+        </label>
+
+        <label className="flex items-center gap-3 text-sm text-[var(--muted)]">
+          <input type="checkbox" className="rounded border-[var(--line)]" />
+          <span>Remember this terminal for 24 hours</span>
+        </label>
+
+        {error ? <InlineBanner variant="error" title="Sign-in failed" message={error} /> : null}
+
+        <button
+          disabled={isSubmitting}
+          className="primary-button inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3.5 text-sm font-semibold shadow-sm disabled:opacity-60"
+        >
+          {isSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+          {isSubmitting ? "Authorizing..." : "Authorize Access"}
         </button>
       </form>
     </AuthLayout>

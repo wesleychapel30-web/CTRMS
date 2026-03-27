@@ -1,5 +1,5 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, type CSSProperties } from "react";
 
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
@@ -17,26 +17,30 @@ type ToastMessageProps = {
   onDismiss: (id: string) => void;
 };
 
-const variantMeta: Record<ToastVariant, { icon: typeof CheckCircle2; shell: string; iconColor: string }> = {
+const variantMeta: Record<ToastVariant, { icon: typeof CheckCircle2; shell: string; iconColor: string; progress: string }> = {
   success: {
     icon: CheckCircle2,
     shell: "border-emerald-200 bg-white dark:border-emerald-500/25 dark:bg-slate-950",
     iconColor: "text-emerald-600 dark:text-emerald-300",
+    progress: "bg-emerald-500/80 dark:bg-emerald-300/80",
   },
   error: {
     icon: AlertCircle,
     shell: "border-rose-200 bg-white dark:border-rose-500/25 dark:bg-slate-950",
     iconColor: "text-rose-600 dark:text-rose-300",
+    progress: "bg-rose-500/80 dark:bg-rose-300/80",
   },
   warning: {
     icon: AlertTriangle,
     shell: "border-amber-200 bg-white dark:border-amber-500/25 dark:bg-slate-950",
     iconColor: "text-amber-600 dark:text-amber-300",
+    progress: "bg-amber-500/80 dark:bg-amber-300/80",
   },
   info: {
     icon: Info,
     shell: "border-blue-200 bg-white dark:border-blue-500/25 dark:bg-slate-950",
     iconColor: "text-blue-600 dark:text-blue-300",
+    progress: "bg-blue-500/80 dark:bg-blue-300/80",
   },
 };
 
@@ -48,6 +52,7 @@ export function ToastMessage({ toast, onDismiss }: ToastMessageProps) {
 
   const meta = variantMeta[toast.variant];
   const Icon = meta.icon;
+  const progressStyle = { animationDuration: `${toast.durationMs}ms` } as CSSProperties;
 
   return (
     <div
@@ -71,6 +76,12 @@ export function ToastMessage({ toast, onDismiss }: ToastMessageProps) {
         >
           <X className="h-4 w-4" />
         </button>
+      </div>
+      <div className="mt-3 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+        <div
+          className={`toast-progress-bar h-full origin-left rounded-full ${meta.progress}`}
+          style={progressStyle}
+        />
       </div>
     </div>
   );

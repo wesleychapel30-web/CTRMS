@@ -1,4 +1,4 @@
-import { MessageSquareMore, NotebookPen } from "lucide-react";
+import { LoaderCircle, MessageSquareMore, NotebookPen } from "lucide-react";
 import { useMemo, useState } from "react";
 import { HistoryTimeline } from "./HistoryTimeline";
 import { mapTimelineEntries } from "../lib/historyTimeline";
@@ -43,21 +43,21 @@ export function RecordChatter({
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
+        <h3 className="headline-font text-base font-bold tracking-[-0.03em] text-[var(--ink)]">{title}</h3>
+        <p className="mt-1 text-sm font-medium text-[var(--muted)]">{subtitle}</p>
       </div>
 
       {canAddComment || canAddInternalNote ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+        <div className="rounded-lg bg-[var(--surface-low)] p-4">
           <div className="flex flex-wrap gap-2">
             {canAddComment ? (
               <button
                 type="button"
                 onClick={() => setMode("comment")}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
+                className={`inline-flex items-center gap-2 rounded-sm px-3 py-2 text-sm font-semibold ${
                   mode === "comment"
-                    ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400/60 dark:bg-blue-500/10 dark:text-blue-200"
-                    : "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                    ? "bg-[var(--surface-card)] text-[var(--accent)]"
+                    : "bg-transparent text-[var(--muted)]"
                 }`}
               >
                 <MessageSquareMore className="h-4 w-4" />
@@ -68,10 +68,10 @@ export function RecordChatter({
               <button
                 type="button"
                 onClick={() => setMode("internal_note")}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
+                className={`inline-flex items-center gap-2 rounded-sm px-3 py-2 text-sm font-semibold ${
                   mode === "internal_note"
-                    ? "border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-400/60 dark:bg-amber-500/10 dark:text-amber-200"
-                    : "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                    ? "bg-[var(--surface-card)] text-[var(--warning)]"
+                    : "bg-transparent text-[var(--muted)]"
                 }`}
               >
                 <NotebookPen className="h-4 w-4" />
@@ -85,10 +85,10 @@ export function RecordChatter({
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder={mode === "internal_note" ? "Add an internal note for administrators and directors." : "Add a record comment."}
-            className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none dark:border-slate-700 dark:bg-slate-950"
+            className="institutional-input mt-3 w-full rounded-md px-4 py-3 text-sm outline-none"
           />
           <div className="mt-3 flex items-center justify-between gap-3">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs font-medium text-[var(--muted)]">
               {mode === "internal_note"
                 ? "Internal notes are visible only to administrators and directors."
                 : "Comments remain part of the permanent record history."}
@@ -97,8 +97,9 @@ export function RecordChatter({
               type="button"
               disabled={isSubmitting || !body.trim()}
               onClick={() => void submit()}
-              className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 dark:bg-cyan-500 dark:text-slate-900"
+              className="primary-button inline-flex items-center gap-2 rounded-sm px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
             >
+              {isSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
               {isSubmitting ? "Saving..." : mode === "internal_note" ? "Save Note" : "Add Comment"}
             </button>
           </div>

@@ -1,6 +1,7 @@
 import { Download } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BarChart, LineChart } from "../components/Charts";
+import { InlineBanner, StatePanel } from "../components/FeedbackStates";
 import { FilterBar } from "../components/FilterBar";
 import { SectionCard } from "../components/SectionCard";
 import { useSession } from "../context/SessionContext";
@@ -18,6 +19,7 @@ export function ReportsPage() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -34,13 +36,16 @@ export function ReportsPage() {
       params.set("created_at__lte", new Date(`${toDate}T23:59:59.999`).toISOString());
     }
 
+    setIsLoading(true);
+    setError(null);
     fetchRequestReport(params)
       .then((reportData) => {
         setReport(reportData);
         setTrendData(reportData.charts?.monthly_trend ?? []);
         setApprovalRate(reportData.charts?.approval_rate ?? []);
       })
-      .catch((reason) => setError(reason.message));
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to load reports"))
+      .finally(() => setIsLoading(false));
   }, [status, category, fromDate, toDate]);
 
   const categorySummary = useMemo(() => (report ? Object.entries(report.category_stats) : []), [report]);
@@ -55,6 +60,14 @@ export function ReportsPage() {
   const pdfExportUrl = buildApiUrl(`/export/requests-pdf/${exportSuffix}`);
   const canExport = hasPermission("report:export");
 
+  if (error && !report) {
+    return <StatePanel variant="error" title="Reports unavailable" message={error} />;
+  }
+
+  if (isLoading && !report) {
+    return <StatePanel variant="loading" title="Loading reports" message="Preparing operational and financial reporting." />;
+  }
+
   return (
     <div className="space-y-6">
       <SectionCard
@@ -63,11 +76,11 @@ export function ReportsPage() {
         action={
           canExport ? (
             <div className="flex gap-2">
-              <a href={excelExportUrl} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-3 py-2 text-sm dark:border-white/10">
+              <a href={excelExportUrl} className="inline-flex items-center gap-2 rounded-sm bg-[var(--surface-low)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">
                 <Download className="h-4 w-4" />
                 Export Excel
               </a>
-              <a href={pdfExportUrl} className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white dark:bg-blue-500">
+              <a href={pdfExportUrl} className="primary-button inline-flex items-center gap-2 rounded-sm px-4 py-2 text-sm font-semibold">
                 <Download className="h-4 w-4" />
                 Export PDF
               </a>
@@ -75,18 +88,19 @@ export function ReportsPage() {
           ) : null
         }
       >
-        <FilterBar className="mb-5">
+        {error ? <InlineBanner variant="warning" title="Report refresh issue" message={error} className="mb-5" /> : null}
+        <FilterBar className="mb-5 rounded-lg bg-[var(--surface-low)] p-5">
           <label className="grid gap-2 text-sm">
-            <span className="text-xs uppercase tracking-[0.16em] text-slate-400">From</span>
-            <input value={fromDate} onChange={(event) => setFromDate(event.target.value)} type="date" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 outline-none dark:border-slate-700 dark:bg-slate-900" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">From</span>
+            <input value={fromDate} onChange={(event) => setFromDate(event.target.value)} type="date" className="institutional-input rounded-sm px-3 py-2.5 outline-none" />
           </label>
           <label className="grid gap-2 text-sm">
-            <span className="text-xs uppercase tracking-[0.16em] text-slate-400">To</span>
-            <input value={toDate} onChange={(event) => setToDate(event.target.value)} type="date" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 outline-none dark:border-slate-700 dark:bg-slate-900" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">To</span>
+            <input value={toDate} onChange={(event) => setToDate(event.target.value)} type="date" className="institutional-input rounded-sm px-3 py-2.5 outline-none" />
           </label>
           <label className="grid gap-2 text-sm">
-            <span className="text-xs uppercase tracking-[0.16em] text-slate-400">Status</span>
-            <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 outline-none dark:border-slate-700 dark:bg-slate-900">
+            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Status</span>
+            <select value={status} onChange={(event) => setStatus(event.target.value)} className="institutional-input rounded-sm px-3 py-2.5 outline-none">
               <option value="">All statuses</option>
               <option value="draft">Draft</option>
               <option value="pending">Submitted</option>
@@ -100,8 +114,8 @@ export function ReportsPage() {
             </select>
           </label>
           <label className="grid gap-2 text-sm">
-            <span className="text-xs uppercase tracking-[0.16em] text-slate-400">Category</span>
-            <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 outline-none dark:border-slate-700 dark:bg-slate-900">
+            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Category</span>
+            <select value={category} onChange={(event) => setCategory(event.target.value)} className="institutional-input rounded-sm px-3 py-2.5 outline-none">
               <option value="">All categories</option>
               <option value="tuition">Tuition</option>
               <option value="medical">Medical Support</option>
@@ -114,19 +128,17 @@ export function ReportsPage() {
 
         {report ? (
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
               Total requests: <strong>{report.total_requests}</strong>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
               Approved: <strong>{report.approved_requests}</strong>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
               Disbursed: <strong>{formatCurrency(report.total_disbursed)}</strong>
             </div>
           </div>
-        ) : (
-          <p className="text-sm text-slate-500">{error ?? "Loading reports..."}</p>
-        )}
+        ) : null}
       </SectionCard>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -141,13 +153,13 @@ export function ReportsPage() {
       <SectionCard title="Category Summary">
         <div className="grid gap-3 md:grid-cols-2">
           {categorySummary.map(([label, value]) => (
-            <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">{label}</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">{value.count} requests</p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{formatCurrency(value.total_amount)}</p>
+            <div key={label} className="rounded-lg bg-[var(--surface-low)] px-4 py-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
+              <p className="headline-font mt-2 text-lg font-bold text-[var(--ink)]">{value.count} requests</p>
+              <p className="mt-1 text-sm font-medium text-[var(--muted)]">{formatCurrency(value.total_amount)}</p>
             </div>
           ))}
-          {!categorySummary.length ? <p className="text-sm text-slate-500 dark:text-slate-400">No category data available for the selected filters.</p> : null}
+          {!categorySummary.length ? <p className="text-sm text-[var(--muted)]">No category data available for the selected filters.</p> : null}
         </div>
       </SectionCard>
     </div>

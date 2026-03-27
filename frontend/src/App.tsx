@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
+import { StatePanel } from "./components/FeedbackStates";
 import { useSession } from "./context/SessionContext";
 import { ActivityPage } from "./pages/ActivityPage";
 import { AdminPage } from "./pages/AdminPage";
@@ -108,7 +109,17 @@ function App() {
   }
 
   if (isLoading) {
-    return <div className="grid min-h-screen place-items-center text-sm text-slate-500">Loading session...</div>;
+    return (
+      <div data-theme={theme} className="min-h-screen bg-[var(--surface)] px-6 py-10">
+        <div className="mx-auto max-w-xl">
+          <StatePanel
+            variant="loading"
+            title="Loading session"
+            message="Restoring permissions, profile settings, and access state."
+          />
+        </div>
+      </div>
+    );
   }
 
   if (!user) {

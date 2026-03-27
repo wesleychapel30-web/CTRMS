@@ -25,11 +25,13 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ title: string; subtitle: string; href: string }>>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
 
   const permissionSet = useMemo(() => new Set(user?.permissions ?? []), [user?.permissions]);
@@ -85,36 +87,44 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
     if (!isNotificationsOpen) {
       return;
     }
+    setIsNotificationsLoading(true);
     fetchNotifications()
       .then((data) => {
         setNotifications(data.notifications ?? []);
         setUnreadCount(data.unread_count ?? 0);
         setNotificationError(null);
       })
-      .catch((reason) => setNotificationError(reason instanceof Error ? reason.message : "Unable to load notifications"));
+      .catch((reason) => setNotificationError(reason instanceof Error ? reason.message : "Unable to load notifications"))
+      .finally(() => setIsNotificationsLoading(false));
   }, [isNotificationsOpen]);
 
   useEffect(() => {
     if (!canGlobalSearch || !isSearchOpen) {
+      setIsSearchLoading(false);
       return;
     }
     const trimmed = searchQuery.trim();
     if (!trimmed) {
       setSearchResults([]);
       setSearchError(null);
+      setIsSearchLoading(false);
       return;
     }
 
     const handle = window.setTimeout(() => {
+      setIsSearchLoading(true);
       fetchGlobalSearch(trimmed)
         .then((data) => {
           setSearchResults((data.results ?? []).map((item) => ({ title: item.title, subtitle: item.subtitle, href: item.href })));
           setSearchError(null);
         })
-        .catch((reason) => setSearchError(reason instanceof Error ? reason.message : "Search failed"));
+        .catch((reason) => setSearchError(reason instanceof Error ? reason.message : "Search failed"))
+        .finally(() => setIsSearchLoading(false));
     }, 220);
 
-    return () => window.clearTimeout(handle);
+    return () => {
+      window.clearTimeout(handle);
+    };
   }, [canGlobalSearch, isSearchOpen, searchQuery]);
 
   const handleNotificationClick = (item: NotificationItem) => {
@@ -127,7 +137,7 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+    <div className="min-h-screen bg-[var(--surface)] text-[var(--ink)]">
       <Sidebar
         items={visibleNavItems}
         user={user}
@@ -137,7 +147,7 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      <div className="lg:pl-72">
+      <div className="lg:pl-64">
         <TopHeader
           title={title}
           subtitle={subtitle}
@@ -153,6 +163,7 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
           onSearchClose={() => setIsSearchOpen(false)}
           searchResults={searchResults}
           searchError={searchError}
+          isSearchLoading={isSearchLoading}
           onSearchSelect={(href) => {
             setIsSearchOpen(false);
             setSearchQuery("");
@@ -164,16 +175,17 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
           onToggleNotifications={() => setIsNotificationsOpen((current) => !current)}
           onCloseNotifications={() => setIsNotificationsOpen(false)}
           notifications={notifications}
+          isNotificationsLoading={isNotificationsLoading}
           unreadCount={unreadCount}
           notificationError={notificationError}
           onNotificationClick={handleNotificationClick}
         />
 
-        <main className="mx-auto w-full max-w-[1480px] px-4 py-5 sm:px-6">
+        <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-8">
           {rightPanel ? (
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
               <div>{children}</div>
-              <aside className="sticky top-[5.5rem] h-[calc(100vh-7rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+              <aside className="surface-panel sticky top-[5.75rem] h-[calc(100vh-7.25rem)] overflow-y-auto rounded-xl p-5">
                 {rightPanel}
               </aside>
             </div>

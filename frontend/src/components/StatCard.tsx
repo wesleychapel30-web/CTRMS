@@ -1,19 +1,19 @@
 import type { Stat } from "../types";
 
 const toneMap = {
-  accent: "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950",
-  success: "border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/20",
-  warning: "border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20",
-  danger: "border-rose-200 bg-rose-50 dark:border-rose-900/40 dark:bg-rose-950/20"
+  accent: "surface-panel text-[var(--ink)]",
+  success: "bg-[#edf8f2] text-[var(--ink)]",
+  warning: "bg-[#fff5e6] text-[var(--ink)]",
+  danger: "bg-[#fdf0ef] text-[var(--ink)]"
 };
 
 export function StatCard({ label, value, change, tone }: Stat) {
   return (
-    <article className={`rounded-xl border p-4 shadow-sm ${toneMap[tone]}`}>
-      <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{label}</p>
+    <article className={`rounded-xl p-5 ${toneMap[tone]}`}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
       <div className="mt-3">
-        <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{value}</p>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{change}</p>
+        <p className="headline-font text-3xl font-extrabold tracking-[-0.04em] text-[var(--ink)]">{value}</p>
+        <p className="mt-1 text-xs font-medium text-[var(--muted)]">{change}</p>
       </div>
     </article>
   );

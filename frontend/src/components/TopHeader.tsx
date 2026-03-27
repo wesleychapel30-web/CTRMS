@@ -1,8 +1,9 @@
-import { Bell, Menu, MoonStar, Plus, Search, SunMedium } from "lucide-react";
+import { Bell, LoaderCircle, Menu, MoonStar, Plus, Search, SunMedium } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "./PageHeader";
 import { NotificationDropdown } from "./NotificationDropdown";
+import { InlineBanner } from "./FeedbackStates";
 import type { NotificationItem, SessionUser, ThemeMode } from "../types";
 
 type SearchResult = {
@@ -26,12 +27,14 @@ type TopHeaderProps = {
   onSearchClose: () => void;
   searchResults: SearchResult[];
   searchError: string | null;
+  isSearchLoading: boolean;
   onSearchSelect: (href: string) => void;
   canCreateRequest: boolean;
   notificationsOpen: boolean;
   onToggleNotifications: () => void;
   onCloseNotifications: () => void;
   notifications: NotificationItem[];
+  isNotificationsLoading: boolean;
   unreadCount: number;
   notificationError: string | null;
   onNotificationClick: (item: NotificationItem) => void;
@@ -52,12 +55,14 @@ export function TopHeader({
   onSearchClose,
   searchResults,
   searchError,
+  isSearchLoading,
   onSearchSelect,
   canCreateRequest,
   notificationsOpen,
   onToggleNotifications,
   onCloseNotifications,
   notifications,
+  isNotificationsLoading,
   unreadCount,
   notificationError,
   onNotificationClick
@@ -100,12 +105,12 @@ export function TopHeader({
   }, [notificationsOpen, onCloseNotifications]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:px-6">
-      <div className="flex items-start justify-between gap-3">
+    <header className="sticky top-0 z-30 bg-[var(--surface)]/85 px-4 py-4 backdrop-blur-md sm:px-8">
+      <div className="flex items-start justify-between gap-4 border-b border-[var(--line)] pb-4">
         <div className="flex min-w-0 items-start gap-3">
           <button
             onClick={onOpenSidebar}
-            className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900 lg:hidden"
+            className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-sm bg-[var(--surface-card)] text-[var(--ink)] hover:bg-[var(--surface-low)] lg:hidden"
             aria-label="Open navigation"
           >
             <Menu className="h-4 w-4" />
@@ -116,40 +121,56 @@ export function TopHeader({
         <div className="flex items-center gap-2">
           {canGlobalSearch ? (
             <div className="relative hidden md:block">
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                <Search className="h-4 w-4" />
+              <label className="flex items-center gap-2 rounded-md bg-[var(--surface-card)] px-3 py-2 text-sm text-[var(--muted)] shadow-sm">
+                <Search className="h-4 w-4 text-[var(--muted)]" />
                 <input
                   value={searchQuery}
                   onChange={(event) => onSearchChange(event.target.value)}
                   onFocus={onSearchOpen}
-                  placeholder="Search"
-                  className="w-56 bg-transparent outline-none"
+                  placeholder="Search institutional data..."
+                  className="w-64 bg-transparent outline-none placeholder:text-[var(--muted)]"
                 />
               </label>
               {isSearchOpen ? (
-                <div className="absolute right-0 top-11 z-40 w-96 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-950">
+                <div className="surface-panel dropdown-enter absolute right-0 top-12 z-40 w-96 overflow-hidden rounded-xl">
                   <div className="max-h-80 overflow-y-auto p-2">
-                    {searchError ? <p className="px-2 py-2 text-sm text-rose-600">{searchError}</p> : null}
-                    {searchResults.length ? (
+                    {searchError ? <InlineBanner variant="error" title="Search unavailable" message={searchError} className="m-1" /> : null}
+                    {!searchError && !searchQuery.trim() ? (
+                      <p className="px-3 py-3 text-sm text-[var(--muted)]">Start typing to search requests, invitations, and records.</p>
+                    ) : null}
+                    {!searchError && isSearchLoading ? (
+                      <div className="space-y-2 p-1" aria-busy="true">
+                        {Array.from({ length: 4 }).map((_, index) => (
+                          <div key={`search-skeleton-${index}`} className="rounded-lg bg-[var(--surface-card)] px-3 py-3">
+                            <div className="space-y-2">
+                              <div className="feedback-skeleton h-3 w-2/3 rounded-full" />
+                              <div className="feedback-skeleton h-2.5 w-full rounded-full" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {!searchError && !isSearchLoading && searchResults.length ? (
                       <div className="space-y-1">
                         {searchResults.slice(0, 8).map((item) => (
                           <button
                             key={item.href}
                             type="button"
                             onClick={() => onSearchSelect(item.href)}
-                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-900"
+                            className="w-full rounded-lg bg-[var(--surface-card)] px-3 py-2 text-left transition hover:-translate-y-[1px] hover:bg-[var(--surface-low)]"
                           >
-                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.title}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">{item.subtitle}</p>
+                            <p className="text-sm font-semibold text-[var(--ink)]">{item.title}</p>
+                            <p className="text-xs text-[var(--muted)]">{item.subtitle}</p>
                           </button>
                         ))}
                       </div>
-                    ) : (
-                      <p className="px-2 py-2 text-sm text-slate-500 dark:text-slate-400">No results.</p>
-                    )}
+                    ) : null}
+                    {!searchError && !isSearchLoading && searchQuery.trim() && !searchResults.length ? (
+                      <p className="px-3 py-3 text-sm text-[var(--muted)]">No matching records found.</p>
+                    ) : null}
                   </div>
-                  <div className="border-t border-slate-200 px-3 py-2 text-right dark:border-slate-800">
-                    <button onClick={onSearchClose} className="text-xs text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200">
+                  <div className="bg-[var(--surface-low)] px-3 py-2 text-right">
+                    <button onClick={onSearchClose} className="text-xs font-semibold text-[var(--muted)] hover:text-[var(--ink)]">
                       Close
                     </button>
                   </div>
@@ -161,7 +182,7 @@ export function TopHeader({
           {canCreateRequest ? (
             <Link
               to="/requests/new"
-              className="hidden items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-cyan-500 dark:text-slate-900 dark:hover:bg-cyan-400 sm:inline-flex"
+              className="primary-button hidden items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold shadow-sm hover:opacity-95 sm:inline-flex"
             >
               <Plus className="h-4 w-4" />
               Create Request
@@ -170,7 +191,7 @@ export function TopHeader({
 
           <button
             onClick={onToggleTheme}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--surface-card)] text-[var(--muted)] hover:bg-[var(--surface-low)]"
             aria-label="Toggle theme"
           >
             {theme === "dark" ? <SunMedium className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
@@ -179,16 +200,18 @@ export function TopHeader({
           <div ref={notificationRef} className="relative">
             <button
               onClick={onToggleNotifications}
-              className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--surface-card)] text-[var(--muted)] hover:bg-[var(--surface-low)]"
               aria-label="Notifications"
             >
               <Bell className="h-4 w-4" />
               {unreadCount > 0 ? (
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
               ) : null}
+              {isNotificationsLoading ? <LoaderCircle className="absolute inset-0 m-auto h-3.5 w-3.5 animate-spin text-[var(--accent)]" /> : null}
             </button>
             <NotificationDropdown
               isOpen={notificationsOpen}
+              isLoading={isNotificationsLoading}
               notifications={notifications}
               unreadCount={unreadCount}
               error={notificationError}
@@ -197,11 +220,12 @@ export function TopHeader({
             />
           </div>
 
-          <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-900">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-cyan-500 dark:text-slate-900">
+          <div className="inline-flex items-center gap-3 pl-3">
+            <div className="hidden h-8 w-px bg-[var(--line)] sm:block" />
+            <span className="grid h-8 w-8 place-items-center rounded-sm bg-[var(--surface-container)] text-xs font-semibold text-[var(--ink)]">
               {initials}
             </span>
-            <span className="hidden text-sm font-medium text-slate-900 dark:text-slate-100 sm:block">{user?.full_name ?? "User"}</span>
+            <span className="hidden text-sm font-semibold text-[var(--ink)] sm:block">{user?.full_name ?? "User"}</span>
           </div>
         </div>
       </div>

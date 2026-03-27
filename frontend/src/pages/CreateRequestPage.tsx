@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { InlineBanner } from "../components/FeedbackStates";
 import { SectionCard } from "../components/SectionCard";
 import { useSession } from "../context/SessionContext";
+import { useToast } from "../context/ToastContext";
 import { createRequest, suggestRequestCategory, uploadRequestDocument } from "../lib/api";
 
 export function CreateRequestPage() {
   const navigate = useNavigate();
   const { hasPermission } = useSession();
+  const toast = useToast();
   const [form, setForm] = useState({
     applicant_name: "",
     applicant_email: "",
@@ -33,7 +36,9 @@ export function CreateRequestPage() {
 
   const submitRequest = async (workflowStatus: "draft" | "pending") => {
     if (!hasPermission("request:create")) {
-      setError("You do not have permission to create requests.");
+      const message = "You do not have permission to create requests.";
+      setError(message);
+      toast.warning(message, "Permission restricted");
       return;
     }
     setIsSubmitting(true);
@@ -53,18 +58,24 @@ export function CreateRequestPage() {
         );
       }
 
+      toast.success(
+        workflowStatus === "draft" ? "Request saved as draft." : "Request submitted successfully.",
+        workflowStatus === "draft" ? "Draft saved" : "Request submitted"
+      );
       navigate(`/requests/${created.id}`);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to create request");
+      const message = reason instanceof Error ? reason.message : "Unable to create request";
+      setError(message);
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <SectionCard title="Create Request" subtitle="Submit a new request.">
+    <SectionCard title="Create Request" subtitle="Capture applicant, category, amount, and supporting files.">
       {!hasPermission("request:create") ? (
-        <p className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+        <p className="rounded-md bg-[var(--surface-low)] px-4 py-4 text-sm text-[var(--muted)]">
           You do not have permission to create requests.
         </p>
       ) : null}
@@ -73,69 +84,69 @@ export function CreateRequestPage() {
           event.preventDefault();
           void submitRequest("pending");
         }}
-        className="grid gap-4 lg:grid-cols-2"
+        className="grid gap-5 lg:grid-cols-2"
       >
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span>Applicant name</span>
           <input
             value={form.applicant_name}
             onChange={(event) => updateField("applicant_name", event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
             required
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span>Email</span>
           <input
             value={form.applicant_email}
             onChange={(event) => updateField("applicant_email", event.target.value)}
             type="email"
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
             required
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span>Phone</span>
           <input
             value={form.applicant_phone}
             onChange={(event) => updateField("applicant_phone", event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
             required
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span>Applicant ID</span>
           <input
             value={form.applicant_id}
             onChange={(event) => updateField("applicant_id", event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span>Organization</span>
           <input
             value={form.applicant_organization}
             onChange={(event) => updateField("applicant_organization", event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span>Role</span>
           <input
             value={form.applicant_role}
             onChange={(event) => updateField("applicant_role", event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span>Region</span>
           <input
             value={form.applicant_region}
             onChange={(event) => updateField("applicant_region", event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span className="flex items-center justify-between gap-3">
             <span>Category</span>
             <button
@@ -146,10 +157,14 @@ export function CreateRequestPage() {
                   .then((res) => {
                     updateField("category", res.category);
                     setCategoryHint(`Suggested: ${res.category_display}`);
+                    toast.info(`Suggested category: ${res.category_display}`, "Category suggestion");
                   })
-                  .catch(() => setCategoryHint("Unable to suggest category"));
+                  .catch(() => {
+                    setCategoryHint("Unable to suggest category");
+                    toast.warning("Unable to suggest category at the moment.", "Suggestion unavailable");
+                  });
               }}
-              className="text-xs font-semibold text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
+              className="text-xs font-semibold text-[var(--accent)] hover:text-[var(--accent-dim)]"
             >
               Suggest
             </button>
@@ -157,7 +172,7 @@ export function CreateRequestPage() {
           <select
             value={form.category}
             onChange={(event) => updateField("category", event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
+            className="institutional-input rounded-md px-4 py-3 outline-none"
           >
             <option value="tuition" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
               Tuition
@@ -175,38 +190,38 @@ export function CreateRequestPage() {
               Other
             </option>
           </select>
-          {categoryHint ? <span className="text-xs text-slate-500 dark:text-slate-400">{categoryHint}</span> : null}
+          {categoryHint ? <span className="text-xs font-medium text-[var(--muted)]">{categoryHint}</span> : null}
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 lg:col-span-2">
+        <label className="grid gap-2 text-sm text-[var(--ink)] lg:col-span-2">
           <span>Request title</span>
           <input
             value={form.title}
             onChange={(event) => updateField("title", event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
             required
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 lg:col-span-2">
+        <label className="grid gap-2 text-sm text-[var(--ink)] lg:col-span-2">
           <span>Description</span>
           <textarea
             value={form.description}
             onChange={(event) => updateField("description", event.target.value)}
             rows={5}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
             required
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span>Beneficiaries</span>
           <input
             value={form.number_of_beneficiaries}
             onChange={(event) => updateField("number_of_beneficiaries", event.target.value)}
             type="number"
             min="1"
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
+            className="institutional-input rounded-md px-4 py-3 outline-none"
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <label className="grid gap-2 text-sm text-[var(--ink)]">
           <span>Amount requested</span>
           <input
             value={form.amount_requested}
@@ -214,42 +229,42 @@ export function CreateRequestPage() {
             type="number"
             min="1"
             step="0.01"
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
+            className="institutional-input rounded-md px-4 py-3 outline-none"
             required
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 lg:col-span-2">
+        <label className="grid gap-2 text-sm text-[var(--ink)] lg:col-span-2">
           <span>Address / location</span>
           <input
             value={form.address}
             onChange={(event) => updateField("address", event.target.value)}
-            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400"
+            className="institutional-input rounded-md px-4 py-3 outline-none placeholder:text-[var(--muted)]"
             required
           />
         </label>
-        <label className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 lg:col-span-2">
+        <label className="grid gap-2 text-sm text-[var(--ink)] lg:col-span-2">
           <span>Supporting documents</span>
           <input
             onChange={(event) => setFiles(event.target.files)}
             type="file"
             multiple
-            className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-slate-700 outline-none file:mr-3 file:rounded-xl file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:file:bg-cyan-500 dark:file:text-slate-950"
+            className="rounded-md border border-dashed border-[var(--line)] bg-[var(--surface-low)] px-4 py-6 text-[var(--muted)] outline-none file:mr-3 file:rounded-sm file:border-0 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white file:[background:linear-gradient(135deg,var(--accent)_0%,var(--accent-dim)_100%)]"
           />
         </label>
-        {error ? <p className="text-sm text-rose-600 lg:col-span-2">{error}</p> : null}
+        {error ? <InlineBanner variant="error" title="Request could not be saved" message={error} className="lg:col-span-2" /> : null}
         <div className="lg:col-span-2 flex justify-end gap-2">
           <button
             type="button"
             disabled={isSubmitting || !hasPermission("request:create")}
             onClick={() => void submitRequest("draft")}
-            className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold disabled:opacity-60 dark:border-white/10"
+            className="rounded-sm bg-[var(--surface-low)] px-5 py-3 text-sm font-semibold text-[var(--ink)] disabled:opacity-60"
           >
             {isSubmitting ? "Saving..." : "Save Draft"}
           </button>
           <button
             type="submit"
             disabled={isSubmitting || !hasPermission("request:create")}
-            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:bg-blue-500"
+            className="primary-button rounded-sm px-5 py-3 text-sm font-semibold disabled:opacity-60"
           >
             {isSubmitting ? "Submitting..." : "Submit Request"}
           </button>

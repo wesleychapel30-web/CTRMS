@@ -368,27 +368,92 @@ export function AdminPage() {
     return actions;
   };
 
-  return (
-    <div className={canManageUsers && rightColumnVisible ? "grid gap-6 xl:grid-cols-[1.2fr_0.8fr]" : "space-y-6"}>
-      {canManageUsers ? (
-        <div className="space-y-6">
-          <SectionCard title="User Management" subtitle="Manage users, roles, and permissions.">
-          {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
+  const totalUsers = users.length;
+  const securityHealth = totalUsers
+    ? Math.max(
+        0,
+        Math.round((users.filter((user) => resolveUserLifecycleState(user) === "active").length / totalUsers) * 100)
+      )
+    : 100;
+  const recentSecurityEvents = activity.filter((entry) =>
+    /denied|blocked|reset|deactivate|archive|lock/i.test(`${entry.action_label} ${entry.description}`)
+  );
 
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile label="Active Users" value={String(overview?.summary.active_users ?? 0)} />
-            <StatTile label="Directors" value={String(overview?.summary.directors ?? 0)} />
-            <StatTile label="Administrators" value={String(overview?.summary.admins ?? 0)} />
-            <StatTile label="Departments" value={String(overview?.summary.departments ?? 0)} />
+  return (
+    <div className="space-y-8">
+      {canManageUsers ? (
+        <section className="grid gap-6 xl:grid-cols-[1fr_18rem]">
+          <div className="metric-strip rounded-xl px-6 py-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="section-kicker">Administration Panel</p>
+                <h2 className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em] text-[var(--ink)]">
+                  User management and access governance
+                </h2>
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--muted)]">
+                  Control institutional access, assign role bundles, reset passwords, and maintain audit-ready administration records.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => document.getElementById("create-user-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="primary-button rounded-md px-4 py-2.5 text-sm font-semibold"
+              >
+                Create New User
+              </button>
+            </div>
+
+            <div className="mt-8 grid gap-4 md:grid-cols-[repeat(4,minmax(0,1fr))_15rem]">
+              <StatTile label="Total Users" value={String(totalUsers)} note="System users" />
+              <StatTile label="Active Sessions" value={String(overview?.summary.active_users ?? 0)} note="Currently active" />
+              <StatTile label="Pending Invites" value={String(overview?.summary.audit_events_today ?? 0)} note="Recent admin events" />
+              <StatTile label="Departments" value={String(overview?.summary.departments ?? 0)} note="Configured units" />
+              <div className="hero-card rounded-xl p-5">
+                <p className="section-kicker">Security Health</p>
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="h-2 flex-1 rounded-full bg-[var(--surface-container)]">
+                    <div className="h-2 rounded-full bg-[var(--accent)]" style={{ width: `${securityHealth}%` }} />
+                  </div>
+                  <span className="text-sm font-bold text-[var(--ink)]">{securityHealth}%</span>
+                </div>
+                <p className="mt-3 text-xs text-[var(--muted)]">Account state health based on visible active users.</p>
+              </div>
+            </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Create User</p>
+          <div className="dark-hero-card rounded-xl p-6 text-white">
+            <p className="section-kicker text-white/55">Policy Posture</p>
+            <h3 className="headline-font mt-3 text-xl font-bold tracking-[-0.04em] text-white">
+              Automated policy enforcement
+            </h3>
+            <p className="mt-4 text-sm leading-7 text-white/68">
+              Sensitive actions stay permission-gated, archived users remain attached to historical records, and password resets continue through the protected admin flow.
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      <div className={canManageUsers && rightColumnVisible ? "grid gap-6 xl:grid-cols-[1.2fr_0.8fr]" : "space-y-6"}>
+        {canManageUsers ? (
+        <div className="space-y-6">
+          <SectionCard title="User Management" subtitle="Manage users, roles, and permissions.">
+            {error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}
+
+          <div id="create-user-panel" className="rounded-xl bg-[var(--surface-low)] p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="section-kicker">Create User</p>
+                <h3 className="headline-font mt-2 text-xl font-bold tracking-[-0.04em] text-[var(--ink)]">Register a new account</h3>
+              </div>
+              <span className="rounded-sm bg-[var(--surface-card)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
+                User Setup
+              </span>
+            </div>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <input value={createForm.full_name} onChange={(event) => setCreateForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Full name" className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-950" />
-              <input value={createForm.username} onChange={(event) => setCreateForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Username" className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-950" />
-              <input value={createForm.email} onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" type="email" className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-950" />
-              <input value={createForm.department} onChange={(event) => setCreateForm((prev) => ({ ...prev, department: event.target.value }))} placeholder="Department" className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-950" />
+              <input value={createForm.full_name} onChange={(event) => setCreateForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Full name" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+              <input value={createForm.username} onChange={(event) => setCreateForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Username" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+              <input value={createForm.email} onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" type="email" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+              <input value={createForm.department} onChange={(event) => setCreateForm((prev) => ({ ...prev, department: event.target.value }))} placeholder="Department" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
               <select
                 value={createForm.role}
                 onChange={(event) =>
@@ -398,7 +463,7 @@ export function AdminPage() {
                     additional_roles: prev.additional_roles.filter((roleKey) => roleKey !== event.target.value)
                   }))
                 }
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-950"
+                className="institutional-input rounded-md px-4 py-3 text-sm outline-none"
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option.key} value={option.key}>
@@ -406,16 +471,16 @@ export function AdminPage() {
                   </option>
                 ))}
               </select>
-              <input value={createForm.password} onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Temporary password" type="password" className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-950" />
-              <label className="md:col-span-2 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950">
-                <span>Force password change on first login</span>
+              <input value={createForm.password} onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Temporary password" type="password" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+              <label className="md:col-span-2 flex items-center justify-between rounded-lg bg-[var(--surface-card)] px-4 py-3 text-sm">
+                <span className="font-medium text-[var(--ink)]">Force password change on first login</span>
                 <input type="checkbox" checked={createForm.force_password_change} onChange={(event) => setCreateForm((prev) => ({ ...prev, force_password_change: event.target.checked }))} />
               </label>
-              <div className="md:col-span-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Additional Roles</p>
+              <div className="md:col-span-2 rounded-lg bg-[var(--surface-card)] px-4 py-4">
+                <p className="section-kicker">Additional Roles</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {availableCreateAdditionalRoles.map((option) => (
-                    <label key={option.key} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <label key={option.key} className="mt-3 flex items-center gap-2 text-sm text-[var(--ink)]">
                       <input
                         type="checkbox"
                         checked={createForm.additional_roles.includes(option.key)}
@@ -444,7 +509,7 @@ export function AdminPage() {
                     toast.error(message);
                   })
               }
-              className="mt-3 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white dark:bg-cyan-500 dark:text-slate-900"
+              className="primary-button mt-4 rounded-md px-4 py-2.5 text-sm font-semibold"
             >
               Add User
             </button>
@@ -506,9 +571,9 @@ export function AdminPage() {
           {selectedUser ? (
             <SectionCard title="Edit User" subtitle="Update profile and account state.">
             <div className="grid gap-3 md:grid-cols-2">
-              <input value={editForm.full_name} onChange={(event) => setEditForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Full name" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-900" />
-              <input value={editForm.email} onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" type="email" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-900" />
-              <input value={editForm.department} onChange={(event) => setEditForm((prev) => ({ ...prev, department: event.target.value }))} placeholder="Department" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-900" />
+              <input value={editForm.full_name} onChange={(event) => setEditForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Full name" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+              <input value={editForm.email} onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" type="email" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+              <input value={editForm.department} onChange={(event) => setEditForm((prev) => ({ ...prev, department: event.target.value }))} placeholder="Department" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
               <select
                 disabled={!canAssignRole}
                 value={editForm.role}
@@ -519,7 +584,7 @@ export function AdminPage() {
                     additional_roles: prev.additional_roles.filter((roleKey) => roleKey !== event.target.value)
                   }))
                 }
-                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
+                className="institutional-input rounded-md px-4 py-3 text-sm outline-none disabled:opacity-60"
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option.key} value={option.key}>
@@ -527,16 +592,16 @@ export function AdminPage() {
                   </option>
                 ))}
               </select>
-              <label className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900">
-                <span>Active</span>
+              <label className="flex items-center justify-between rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
+                <span className="font-medium text-[var(--ink)]">Active</span>
                 <input type="checkbox" disabled={!canDeactivateUsers} checked={editForm.is_active} onChange={(event) => setEditForm((prev) => ({ ...prev, is_active: event.target.checked }))} />
               </label>
-              <label className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900">
-                <span>Archived</span>
+              <label className="flex items-center justify-between rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
+                <span className="font-medium text-[var(--ink)]">Archived</span>
                 <input type="checkbox" disabled={!canDeactivateUsers} checked={editForm.is_archived} onChange={(event) => setEditForm((prev) => ({ ...prev, is_archived: event.target.checked }))} />
               </label>
-              <label className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900">
-                <span>Locked</span>
+              <label className="flex items-center justify-between rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
+                <span className="font-medium text-[var(--ink)]">Locked</span>
                 <input
                   type="checkbox"
                   disabled={!canDeactivateUsers}
@@ -544,15 +609,15 @@ export function AdminPage() {
                   onChange={(event) => setEditForm((prev) => ({ ...prev, is_active_staff: !event.target.checked }))}
                 />
               </label>
-              <label className="md:col-span-2 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900">
-                <span>Force password change on next login</span>
+              <label className="md:col-span-2 flex items-center justify-between rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
+                <span className="font-medium text-[var(--ink)]">Force password change on next login</span>
                 <input type="checkbox" disabled={!canResetPassword} checked={editForm.force_password_change} onChange={(event) => setEditForm((prev) => ({ ...prev, force_password_change: event.target.checked }))} />
               </label>
-              <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Additional Roles</p>
+              <div className="md:col-span-2 rounded-lg bg-[var(--surface-low)] px-4 py-4">
+                <p className="section-kicker">Additional Roles</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {availableEditAdditionalRoles.map((option) => (
-                    <label key={option.key} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <label key={option.key} className="mt-3 flex items-center gap-2 text-sm text-[var(--ink)]">
                       <input
                         type="checkbox"
                         disabled={!canAssignRole}
@@ -592,11 +657,11 @@ export function AdminPage() {
                       toast.error(message);
                     })
                 }
-                className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white dark:bg-cyan-500 dark:text-slate-900"
+                className="primary-button rounded-md px-4 py-2.5 text-sm font-semibold"
               >
                 Save Changes
               </button>
-              <button type="button" onClick={() => setSelectedUserId(null)} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold dark:border-slate-700">
+              <button type="button" onClick={() => setSelectedUserId(null)} className="secondary-button rounded-md px-4 py-2.5 text-sm font-semibold">
                 Clear Selection
               </button>
             </div>
@@ -606,9 +671,9 @@ export function AdminPage() {
           {resetTarget ? (
             <SectionCard title="Reset Password" subtitle={`Reset password for ${resetTarget.name}.`}>
             <div className="grid gap-3 md:grid-cols-2">
-              <input value={resetPasswordValue} onChange={(event) => setResetPasswordValue(event.target.value)} placeholder="New temporary password" type="password" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none dark:border-slate-700 dark:bg-slate-900" />
-              <label className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900">
-                <span>Force password change on next login</span>
+              <input value={resetPasswordValue} onChange={(event) => setResetPasswordValue(event.target.value)} placeholder="New temporary password" type="password" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+              <label className="flex items-center justify-between rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
+                <span className="font-medium text-[var(--ink)]">Force password change on next login</span>
                 <input type="checkbox" checked={resetForcePasswordChange} onChange={(event) => setResetForcePasswordChange(event.target.checked)} />
               </label>
             </div>
@@ -633,11 +698,11 @@ export function AdminPage() {
                       toast.error(message);
                     })
                 }
-                className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white dark:bg-cyan-500 dark:text-slate-900"
+                className="primary-button rounded-md px-4 py-2.5 text-sm font-semibold"
               >
                 Reset Password
               </button>
-              <button type="button" onClick={() => setResetTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold dark:border-slate-700">
+              <button type="button" onClick={() => setResetTarget(null)} className="secondary-button rounded-md px-4 py-2.5 text-sm font-semibold">
                 Cancel
               </button>
             </div>
@@ -752,37 +817,57 @@ export function AdminPage() {
         <SectionCard title="Activity Logs" subtitle="Recent administration actions.">
           {canViewActivity ? (
             isLoadingActivity ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">Loading activity logs...</p>
+              <p className="text-sm text-[var(--muted)]">Loading activity logs...</p>
             ) : activityError ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">{activityError}</p>
+              <p className="text-sm text-[var(--muted)]">{activityError}</p>
             ) : activity.length ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {activity.map((entry) => (
-                  <div key={entry.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{entry.user}</p>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{entry.message ?? `${sentenceCase(entry.action_label)} · ${entry.content_type}`}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDateTime(entry.created_at)}</p>
+                  <div key={entry.id} className="rounded-lg bg-[var(--surface-low)] px-4 py-3">
+                    <p className="text-sm font-semibold text-[var(--ink)]">{entry.user}</p>
+                    <p className="mt-1 text-sm text-[var(--muted)]">{entry.message ?? `${sentenceCase(entry.action_label)} · ${entry.content_type}`}</p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(entry.created_at)}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No recent activity logs available.</p>
+              <p className="text-sm text-[var(--muted)]">No recent activity logs available.</p>
             )
           ) : (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Activity logs are restricted to authorized roles.</p>
+            <p className="text-sm text-[var(--muted)]">Activity logs are restricted to authorized roles.</p>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Recent Security Events" subtitle="Flagged user and policy actions.">
+          {recentSecurityEvents.length ? (
+            <div className="space-y-3">
+              {recentSecurityEvents.slice(0, 3).map((entry) => (
+                <div key={entry.id} className="flex gap-3">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-[var(--danger)]" />
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--ink)]">{entry.message ?? sentenceCase(entry.action_label)}</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">{entry.user} · {formatDateTime(entry.created_at)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">No flagged security events in the current view.</p>
           )}
         </SectionCard>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value, note }: { label: string; value: string; note: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1.5 text-xl font-semibold text-slate-900 dark:text-slate-100">{value}</p>
+    <div className="table-stat rounded-xl px-5 py-4">
+      <p className="section-kicker">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-[var(--ink)]">{value}</p>
+      <p className="mt-1 text-xs text-[var(--muted)]">{note}</p>
     </div>
   );
 }

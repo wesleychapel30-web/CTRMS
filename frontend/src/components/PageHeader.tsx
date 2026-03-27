@@ -5,9 +5,9 @@ type PageHeaderProps = {
 
 export function PageHeader({ title, subtitle }: PageHeaderProps) {
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-[-0.02em] text-slate-900 dark:text-slate-100">{title}</h1>
-      {subtitle ? <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{subtitle}</p> : null}
+    <div className="min-w-0">
+      <h1 className="headline-font text-[1.95rem] font-extrabold tracking-[-0.04em] text-[var(--ink)]">{title}</h1>
+      {subtitle ? <p className="mt-1 max-w-3xl text-sm font-medium text-[var(--muted)]">{subtitle}</p> : null}
     </div>
   );
 }

@@ -9,11 +9,11 @@ type DetailSectionCardProps = {
 
 export function DetailSectionCard({ title, subtitle, action, children }: DetailSectionCardProps) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
-      <header className="mb-4 flex items-start justify-between gap-4 border-b border-slate-200 pb-3 dark:border-slate-800">
+    <section className="surface-panel rounded-xl p-6">
+      <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
-          {subtitle ? <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{subtitle}</p> : null}
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">{title}</h3>
+          {subtitle ? <p className="mt-2 text-sm font-medium text-[var(--muted)]">{subtitle}</p> : null}
         </div>
         {action}
       </header>

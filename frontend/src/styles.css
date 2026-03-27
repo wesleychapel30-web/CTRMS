@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -6,34 +6,58 @@
 
 :root {
   color-scheme: light;
-  --ink: #0f172a;
-  --muted: #64748b;
-  --surface: #f1f5f9;
-  --panel: #ffffff;
-  --line: #dbe3ee;
-  --accent: #1d4ed8;
-  --success: #059669;
+  --ink: #2a3439;
+  --muted: #566166;
+  --surface: #f7f9fb;
+  --surface-low: #f0f4f7;
+  --surface-card: #ffffff;
+  --surface-container: #e8eff3;
+  --surface-high: #e1e9ee;
+  --surface-highest: #d9e4ea;
+  --line: rgba(169, 180, 185, 0.22);
+  --accent: #545f73;
+  --accent-dim: #485367;
+  --accent-soft: #d8e3fb;
+  --success: #14805e;
   --warning: #d97706;
-  --danger: #dc2626;
+  --danger: #9f403d;
+  --sidebar: #121a2b;
+  --sidebar-hover: #1b2537;
+  --sidebar-active: #232f44;
+  --sidebar-text: #d4ddeb;
+  --sidebar-muted: #7f8ca6;
+  --shadow-ambient: 0 4px 20px rgba(42, 52, 57, 0.04), 0 12px 40px rgba(42, 52, 57, 0.08);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --ink: #e5e7eb;
-  --muted: #9ca3af;
-  --surface: #020617;
-  --panel: #0b1220;
-  --line: #1e293b;
-  --accent: #38bdf8;
-  --success: #34d399;
-  --warning: #fbbf24;
-  --danger: #fb7185;
+  --ink: #ecf2f5;
+  --muted: #9faab3;
+  --surface: #0c1116;
+  --surface-low: #121920;
+  --surface-card: #161d25;
+  --surface-container: #1c252f;
+  --surface-high: #24313d;
+  --surface-highest: #2a3845;
+  --line: rgba(169, 180, 185, 0.14);
+  --accent: #9cb6e1;
+  --accent-dim: #7d93b8;
+  --accent-soft: rgba(156, 182, 225, 0.15);
+  --success: #78d2ae;
+  --warning: #f1b857;
+  --danger: #e58884;
+  --sidebar: #090d12;
+  --sidebar-hover: #141b24;
+  --sidebar-active: #1d2735;
+  --sidebar-text: #dde6f4;
+  --sidebar-muted: #7f8ca3;
+  --shadow-ambient: 0 12px 32px rgba(2, 6, 23, 0.35);
 }
 
 [data-theme="dark"] input,
 [data-theme="dark"] textarea,
 [data-theme="dark"] select {
-  color: #e2e8f0;
+  color: var(--ink);
 }
 
 [data-theme="dark"] input::placeholder,
@@ -74,6 +98,15 @@ body {
   background: rgba(15, 108, 221, 0.18);
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Manrope", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
 button,
 input,
 textarea,
@@ -108,12 +141,194 @@ select {
   background: transparent;
 }
 
+.headline-font {
+  font-family: "Manrope", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+.surface-panel {
+  background: var(--surface-card);
+  box-shadow: var(--shadow-ambient);
+}
+
+.surface-muted {
+  background: var(--surface-low);
+}
+
+.ghost-outline {
+  border: 1px solid var(--line);
+}
+
+.institutional-input {
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.institutional-input:focus {
+  border-color: rgba(84, 95, 115, 0.9);
+  box-shadow: 0 0 0 1px rgba(84, 95, 115, 0.24);
+}
+
+.primary-button {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+  color: #f6f7ff;
+}
+
+.secondary-button {
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.secondary-button:hover {
+  background: var(--surface-low);
+}
+
+.institutional-tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--muted);
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.institutional-tab:hover {
+  background: var(--surface-low);
+  color: var(--ink);
+}
+
+.institutional-tab-active {
+  background: var(--surface-card);
+  box-shadow: var(--shadow-ambient);
+  color: var(--accent);
+}
+
+.institutional-tab-active::after {
+  content: "";
+  display: block;
+  height: 1rem;
+  width: 0.2rem;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.metric-strip {
+  background: var(--surface-card);
+  box-shadow: var(--shadow-ambient);
+}
+
+.metric-segment {
+  position: relative;
+}
+
+.metric-segment + .metric-segment::before {
+  content: "";
+  position: absolute;
+  left: -1.5rem;
+  top: 0.1rem;
+  height: 2.5rem;
+  width: 1px;
+  background: var(--surface-container);
+}
+
+.slate-rail {
+  background: linear-gradient(180deg, #101724 0%, #182233 100%);
+  color: #edf2fb;
+  box-shadow: var(--shadow-ambient);
+}
+
+.soft-panel {
+  background: color-mix(in srgb, var(--surface-low) 78%, white 22%);
+}
+
+.soft-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.section-kicker {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hero-card {
+  background:
+    radial-gradient(circle at top right, rgba(216, 227, 251, 0.75), transparent 38%),
+    linear-gradient(135deg, var(--surface-card) 0%, var(--surface-low) 100%);
+  box-shadow: var(--shadow-ambient);
+}
+
+.dark-hero-card {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 34%),
+    linear-gradient(135deg, #121a2b 0%, #1b273a 100%);
+  box-shadow: var(--shadow-ambient);
+}
+
+.table-stat {
+  border: 1px solid var(--line);
+  background: var(--surface-card);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 .toast-enter {
   animation: toast-in 180ms ease-out forwards;
 }
 
 .toast-exit {
   animation: toast-out 180ms ease-in forwards;
+}
+
+.toast-progress-bar {
+  animation-name: toast-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.feedback-enter {
+  animation: feedback-in 220ms ease-out both;
+}
+
+.dropdown-enter {
+  transform-origin: top right;
+  animation: dropdown-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.feedback-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-container) 70%, var(--surface-low) 30%);
+}
+
+.feedback-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.38) 50%,
+    transparent 100%
+  );
+  animation: feedback-shimmer 1.3s linear infinite;
 }
 
 @keyframes toast-in {
@@ -135,5 +350,42 @@ select {
   to {
     opacity: 0;
     transform: translateY(-6px) scale(0.98);
+  }
+}
+
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes feedback-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes feedback-shimmer {
+  100% {
+    transform: translateX(100%);
   }
 }
