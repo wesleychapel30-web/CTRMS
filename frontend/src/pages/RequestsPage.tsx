@@ -1,5 +1,5 @@
-import { Funnel, Plus, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Funnel, Plus, Search, X } from "lucide-react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { DataTable } from "../components/DataTable";
 import { InlineBanner } from "../components/FeedbackStates";
@@ -23,6 +23,7 @@ export function RequestsPage() {
   const { hasPermission } = useSession();
   const [rows, setRows] = useState<RequestRecord[]>([]);
   const [count, setCount] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [category, setCategory] = useState("");
@@ -30,6 +31,7 @@ export function RequestsPage() {
   const [ordering, setOrdering] = useState("-created_at");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const deferredSearchInput = useDeferredValue(searchInput);
 
   const loadRequests = () => {
     const params = new URLSearchParams();
@@ -61,6 +63,17 @@ export function RequestsPage() {
   }, [search, status, category, page, ordering]);
 
   useEffect(() => {
+    const handle = window.setTimeout(() => {
+      const nextSearch = deferredSearchInput.trim();
+      startTransition(() => {
+        setSearch((current) => (current === nextSearch ? current : nextSearch));
+      });
+    }, 180);
+
+    return () => window.clearTimeout(handle);
+  }, [deferredSearchInput]);
+
+  useEffect(() => {
     setPage(1);
   }, [search, status, category]);
 
@@ -80,6 +93,21 @@ export function RequestsPage() {
   const pdfExportUrl = buildApiUrl(`/export/requests-pdf/${exportSuffix}`);
   const canExport = hasPermission("report:export");
   const canCreateRequest = hasPermission("request:create");
+  const isSearchSyncing = searchInput.trim() !== search;
+  const activeFilters = useMemo(() => {
+    const filters: Array<{ key: string; label: string }> = [];
+    if (search) {
+      filters.push({ key: "search", label: `Search: ${search}` });
+    }
+    if (status) {
+      filters.push({ key: "status", label: `Status: ${status.replace(/_/g, " ")}` });
+    }
+    if (category) {
+      const categoryLabel = requestCategoryOptions.find((option) => option.value === category)?.label ?? category;
+      filters.push({ key: "category", label: `Category: ${categoryLabel}` });
+    }
+    return filters;
+  }, [search, status, category]);
 
   return (
     <div className="space-y-6">
@@ -114,8 +142,8 @@ export function RequestsPage() {
           <label className="flex min-w-[16rem] items-center gap-2 rounded-sm bg-[var(--surface-card)] px-3 py-2.5 text-sm text-[var(--muted)]">
             <Search className="h-4 w-4 text-[var(--muted)]" />
             <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               className="w-full bg-transparent outline-none placeholder:text-[var(--muted)]"
               placeholder="Search by applicant or request ID"
             />
@@ -146,10 +174,45 @@ export function RequestsPage() {
               ))}
             </select>
           </label>
-          <div className="ml-auto rounded-sm bg-transparent px-1 py-2 text-sm font-medium text-[var(--muted)]">
-            Showing {rows.length} request{rows.length === 1 ? "" : "s"}
+          <div className="ml-auto flex items-center gap-3 rounded-sm bg-transparent px-1 py-2 text-sm font-medium text-[var(--muted)]">
+            {isSearchSyncing || isLoading ? (
+              <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                <span className="status-pulse h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+                Updating
+              </span>
+            ) : null}
+            <span>
+              Showing {rows.length} request{rows.length === 1 ? "" : "s"}
+            </span>
           </div>
         </FilterBar>
+
+        {activeFilters.length ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {activeFilters.map((filter) => (
+              <span
+                key={filter.key}
+                className="feedback-enter inline-flex items-center gap-2 rounded-full bg-[var(--surface-low)] px-3 py-1 text-xs font-semibold text-[var(--ink)]"
+              >
+                {filter.label}
+              </span>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput("");
+                startTransition(() => setSearch(""));
+                setStatus("");
+                setCategory("");
+                setPage(1);
+              }}
+              className="interactive-press inline-flex items-center gap-2 rounded-full bg-[var(--surface-card)] px-3 py-1 text-xs font-semibold text-[var(--muted)] ghost-outline hover:text-[var(--ink)]"
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear filters
+            </button>
+          </div>
+        ) : null}
 
         {error ? <InlineBanner variant="error" title="Requests unavailable" message={error} actionLabel="Retry" onAction={loadRequests} /> : null}
 

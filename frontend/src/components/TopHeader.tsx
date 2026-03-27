@@ -191,7 +191,7 @@ export function TopHeader({
 
           <button
             onClick={onToggleTheme}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--surface-card)] text-[var(--muted)] hover:bg-[var(--surface-low)]"
+            className="interactive-press inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--surface-card)] text-[var(--muted)] hover:bg-[var(--surface-low)]"
             aria-label="Toggle theme"
           >
             {theme === "dark" ? <SunMedium className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
@@ -200,7 +200,9 @@ export function TopHeader({
           <div ref={notificationRef} className="relative">
             <button
               onClick={onToggleNotifications}
-              className="relative inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--surface-card)] text-[var(--muted)] hover:bg-[var(--surface-low)]"
+              className={`interactive-press relative inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--surface-card)] text-[var(--muted)] hover:bg-[var(--surface-low)] ${
+                unreadCount > 0 ? "status-pulse" : ""
+              }`}
               aria-label="Notifications"
             >
               <Bell className="h-4 w-4" />

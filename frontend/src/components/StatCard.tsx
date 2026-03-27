@@ -9,7 +9,7 @@ const toneMap = {
 
 export function StatCard({ label, value, change, tone }: Stat) {
   return (
-    <article className={`rounded-xl p-5 ${toneMap[tone]}`}>
+    <article className={`interactive-lift rounded-xl p-5 ${toneMap[tone]}`}>
       <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
       <div className="mt-3">
         <p className="headline-font text-3xl font-extrabold tracking-[-0.04em] text-[var(--ink)]">{value}</p>

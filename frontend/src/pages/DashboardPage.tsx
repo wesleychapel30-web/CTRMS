@@ -51,7 +51,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 lg:col-span-8 surface-panel overflow-hidden rounded-xl">
+        <div className="col-span-12 lg:col-span-8 surface-panel interactive-lift overflow-hidden rounded-xl">
           <div className="flex items-center justify-between bg-[var(--surface-card)] px-6 py-5">
             <div>
               <h3 className="headline-font text-lg font-bold tracking-[-0.03em] text-[var(--ink)]">Financial Summary</h3>
@@ -87,7 +87,7 @@ export function DashboardPage() {
         </div>
 
         <div className="col-span-12 grid gap-6 lg:col-span-4">
-          <div className="rounded-xl bg-[linear-gradient(135deg,var(--accent)_0%,var(--accent-dim)_100%)] p-6 text-white shadow-[var(--shadow-ambient)]">
+          <div className="interactive-lift rounded-xl bg-[linear-gradient(135deg,var(--accent)_0%,var(--accent-dim)_100%)] p-6 text-white shadow-[var(--shadow-ambient)]">
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/75">Total Requests</p>
             <div className="mt-6 flex items-end justify-between gap-4">
               <span className="headline-font text-5xl font-extrabold tracking-[-0.06em]">{overview.stats.total_requests}</span>
@@ -96,7 +96,7 @@ export function DashboardPage() {
               </span>
             </div>
           </div>
-          <div className="surface-panel rounded-xl p-6">
+          <div className="surface-panel interactive-lift rounded-xl p-6">
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Pending Approvals</p>
             <div className="mt-5 flex items-start justify-between gap-4">
               <div>
@@ -138,7 +138,7 @@ export function DashboardPage() {
               <StatCard key={stat.label} {...stat} />
             ))}
             {branding ? (
-              <article className="surface-panel rounded-xl p-5 md:col-span-2">
+              <article className="surface-panel interactive-lift rounded-xl p-5 md:col-span-2">
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Institution</p>
                 <div className="mt-4 flex items-center gap-4">
                   {branding.logo_url ? (

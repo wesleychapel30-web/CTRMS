@@ -183,14 +183,16 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
 
         <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-8">
           {rightPanel ? (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div key={location.pathname} className="page-enter grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
               <div>{children}</div>
               <aside className="surface-panel sticky top-[5.75rem] h-[calc(100vh-7.25rem)] overflow-y-auto rounded-xl p-5">
                 {rightPanel}
               </aside>
             </div>
           ) : (
-            children
+            <div key={location.pathname} className="page-enter">
+              {children}
+            </div>
           )}
         </main>
       </div>

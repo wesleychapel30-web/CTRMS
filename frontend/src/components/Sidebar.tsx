@@ -70,7 +70,7 @@ export function Sidebar({ items, user, branding, onLogout, isOpen, onClose }: Si
                       to={item.href}
                       onClick={onClose}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.16em] transition-all ${
+                        `interactive-press flex items-center gap-3 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.16em] transition-all ${
                           isActive
                             ? "border-l-4 border-[#3b82f6] bg-[var(--sidebar-active)] pl-3 text-white"
                             : "text-[var(--sidebar-text)]/90 hover:bg-[var(--sidebar-hover)] hover:text-white"
@@ -96,7 +96,7 @@ export function Sidebar({ items, user, branding, onLogout, isOpen, onClose }: Si
               </p>
               <button
                 onClick={() => void onLogout()}
-                className="mt-4 w-full rounded-sm bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/14"
+                className="interactive-press mt-4 w-full rounded-sm bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/14"
               >
                 Sign out
               </button>

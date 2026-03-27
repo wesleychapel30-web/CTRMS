@@ -71,7 +71,7 @@ export function DataTable<T extends Record<string, unknown>>({
                         }
                         onSortChange(null);
                       }}
-                      className="inline-flex items-center gap-2"
+                      className="interactive-press inline-flex items-center gap-2"
                     >
                       <span>{column.label}</span>
                       <span className="text-[10px] opacity-70">
@@ -120,7 +120,7 @@ export function DataTable<T extends Record<string, unknown>>({
               type="button"
               disabled={pagination.page <= 1}
               onClick={() => pagination.onPageChange(Math.max(1, pagination.page - 1))}
-              className="rounded-sm bg-[var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+              className="interactive-press rounded-sm bg-[var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
             >
               Previous
             </button>
@@ -128,7 +128,7 @@ export function DataTable<T extends Record<string, unknown>>({
               type="button"
               disabled={pagination.page >= totalPages}
               onClick={() => pagination.onPageChange(Math.min(totalPages, pagination.page + 1))}
-              className="primary-button rounded-sm px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+              className="primary-button interactive-press rounded-sm px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
             >
               Next
             </button>

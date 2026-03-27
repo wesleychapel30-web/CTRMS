@@ -9,7 +9,7 @@ type SectionCardProps = {
 
 export function SectionCard({ title, subtitle, action, children }: SectionCardProps) {
   return (
-    <section className="surface-panel rounded-xl p-6">
+    <section className="surface-panel interactive-lift rounded-xl p-6">
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h3 className="headline-font text-lg font-bold tracking-[-0.03em] text-[var(--ink)]">{title}</h3>

@@ -2,6 +2,7 @@ import { Download, FileText } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { AttachmentPreviewPanel } from "../components/AttachmentPreviewPanel";
+import { ContextActionPrompt, type PromptAnchor } from "../components/ContextActionPrompt";
 import { DetailSectionCard } from "../components/DetailSectionCard";
 import { StatePanel } from "../components/FeedbackStates";
 import { RecordChatter } from "../components/RecordChatter";
@@ -55,6 +56,7 @@ export function RequestDetailsPage() {
   const [adminComment, setAdminComment] = useState("");
   const [previewFile, setPreviewFile] = useState<{ title: string; fileName?: string; fileUrl: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<RequestWorkflowAction | null>(null);
+  const [pendingActionAnchor, setPendingActionAnchor] = useState<PromptAnchor | null>(null);
   const [isActionSubmitting, setIsActionSubmitting] = useState(false);
   const [isTimelineSubmitting, setIsTimelineSubmitting] = useState(false);
   const [isUploadSubmitting, setIsUploadSubmitting] = useState(false);
@@ -179,11 +181,25 @@ export function RequestDetailsPage() {
       const success = actionSuccessMessages[action];
       toast.success(success.message, success.title);
       setPendingAction(null);
+      setPendingActionAnchor(null);
     } catch (reason) {
       toast.error(reason instanceof Error ? reason.message : "Unable to update request workflow");
     } finally {
       setIsActionSubmitting(false);
     }
+  };
+
+  const openActionPrompt = (action: RequestWorkflowAction, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    setPendingActionAnchor({
+      top: rect.top,
+      bottom: rect.bottom,
+      left: rect.left,
+      right: rect.right,
+      width: rect.width,
+      height: rect.height
+    });
+    setPendingAction(action);
   };
 
   const submitTimelineEntry = async (payload: { mode: "comment" | "internal_note"; body: string }) => {
@@ -311,7 +327,7 @@ export function RequestDetailsPage() {
                 <button
                   type="button"
                   disabled={isActionSubmitting}
-                  onClick={() => setPendingAction("start-review")}
+                  onClick={(event) => openActionPrompt("start-review", event.currentTarget)}
                   className="w-full rounded-sm border border-white/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-60"
                 >
                   {isActionSubmitting && pendingAction === "start-review" ? "Processing..." : "Move To Under Review"}
@@ -339,7 +355,7 @@ export function RequestDetailsPage() {
                     <button
                       type="button"
                       disabled={isActionSubmitting}
-                      onClick={() => setPendingAction("approve")}
+                      onClick={(event) => openActionPrompt("approve", event.currentTarget)}
                       className="primary-button rounded-sm px-4 py-3 text-sm font-semibold disabled:opacity-60"
                     >
                       {isActionSubmitting && pendingAction === "approve" ? "Processing..." : "Approve Request"}
@@ -349,7 +365,7 @@ export function RequestDetailsPage() {
                     <button
                       type="button"
                       disabled={isActionSubmitting}
-                      onClick={() => setPendingAction("reject")}
+                      onClick={(event) => openActionPrompt("reject", event.currentTarget)}
                       className="rounded-sm px-4 py-3 text-sm font-semibold text-[#fe8983] transition hover:bg-[#fe8983]/10 disabled:opacity-60"
                     >
                       {isActionSubmitting && pendingAction === "reject" ? "Processing..." : "Reject Request"}
@@ -384,7 +400,7 @@ export function RequestDetailsPage() {
                   <button
                     type="button"
                     disabled={isActionSubmitting}
-                    onClick={() => setPendingAction("cancel")}
+                    onClick={(event) => openActionPrompt("cancel", event.currentTarget)}
                     className="rounded-sm bg-[#9f403d] px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
                   >
                     Cancel
@@ -394,7 +410,7 @@ export function RequestDetailsPage() {
                   <button
                     type="button"
                     disabled={isActionSubmitting}
-                    onClick={() => setPendingAction("restore")}
+                    onClick={(event) => openActionPrompt("restore", event.currentTarget)}
                     className="rounded-sm bg-[var(--surface-low)] px-4 py-3 text-sm font-semibold text-[var(--ink)] disabled:opacity-60"
                   >
                     Restore
@@ -404,7 +420,7 @@ export function RequestDetailsPage() {
                   <button
                     type="button"
                     disabled={isActionSubmitting}
-                    onClick={() => setPendingAction("reverse")}
+                    onClick={(event) => openActionPrompt("reverse", event.currentTarget)}
                     className="primary-button rounded-sm px-4 py-3 text-sm font-semibold disabled:opacity-60"
                   >
                     Revert Decision
@@ -472,7 +488,7 @@ export function RequestDetailsPage() {
                   {showRecordPayment ? (
                     <button
                       type="button"
-                      onClick={() => setPendingAction("record-payment")}
+                      onClick={(event) => openActionPrompt("record-payment", event.currentTarget)}
                       disabled={isActionSubmitting}
                       className="primary-button rounded-sm px-4 py-3 text-sm font-semibold disabled:opacity-60"
                     >
@@ -482,7 +498,7 @@ export function RequestDetailsPage() {
                   {showAddPayment ? (
                     <button
                       type="button"
-                      onClick={() => setPendingAction("add-payment")}
+                      onClick={(event) => openActionPrompt("add-payment", event.currentTarget)}
                       disabled={isActionSubmitting || !additionalPaymentAmount.trim()}
                       className="primary-button rounded-sm px-4 py-3 text-sm font-semibold disabled:opacity-60"
                     >
@@ -492,7 +508,7 @@ export function RequestDetailsPage() {
                   {showMarkCompleted ? (
                     <button
                       type="button"
-                      onClick={() => setPendingAction("mark-completed")}
+                      onClick={(event) => openActionPrompt("mark-completed", event.currentTarget)}
                       disabled={isActionSubmitting}
                       className="rounded-sm bg-[var(--surface-low)] px-4 py-3 text-sm font-semibold text-[var(--ink)] disabled:opacity-60"
                     >
@@ -576,38 +592,26 @@ export function RequestDetailsPage() {
         onClose={() => setPreviewFile(null)}
       />
 
-      {pendingAction ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 px-4">
-          <div className="surface-panel w-full max-w-md rounded-xl bg-[color:var(--surface)]/90 p-5 backdrop-blur">
-            <h4 className="headline-font text-base font-bold text-[var(--ink)]">
-              {pendingAction === "reverse" ? "Revert Decision?" : "Confirm Action"}
-            </h4>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              {pendingAction === "reverse"
-                ? "This will return the record to the previous review stage and restore available decision options."
-                : `${actionLabel}. Continue?`}
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingAction(null)}
-                disabled={isActionSubmitting}
-                className="rounded-sm bg-[var(--surface-low)] px-3 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void runAction(pendingAction)}
-                disabled={isActionSubmitting}
-                className="primary-button rounded-sm px-3 py-2 text-sm font-semibold disabled:opacity-60"
-              >
-                {isActionSubmitting ? "Processing..." : "Confirm"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ContextActionPrompt
+        open={Boolean(pendingAction)}
+        anchor={pendingActionAnchor}
+        title={pendingAction === "reverse" ? "Revert Decision?" : "Confirm Action"}
+        message={
+          pendingAction === "reverse"
+            ? "This will return the record to the previous review stage and restore available decision options."
+            : `${actionLabel}. Continue?`
+        }
+        isSubmitting={isActionSubmitting}
+        onCancel={() => {
+          setPendingAction(null);
+          setPendingActionAnchor(null);
+        }}
+        onConfirm={() => {
+          if (pendingAction) {
+            void runAction(pendingAction);
+          }
+        }}
+      />
     </div>
   );
 }

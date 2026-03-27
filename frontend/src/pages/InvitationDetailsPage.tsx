@@ -2,6 +2,7 @@ import { CalendarDays, Download, FileText, MapPin, Share2 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { AttachmentPreviewPanel } from "../components/AttachmentPreviewPanel";
+import { ContextActionPrompt, type PromptAnchor } from "../components/ContextActionPrompt";
 import { DetailSectionCard } from "../components/DetailSectionCard";
 import { StatePanel } from "../components/FeedbackStates";
 import { RecordChatter } from "../components/RecordChatter";
@@ -38,6 +39,7 @@ export function InvitationDetailsPage() {
   const [attachment, setAttachment] = useState<File | null>(null);
   const [previewFile, setPreviewFile] = useState<{ title: string; fileName?: string; fileUrl: string } | null>(null);
   const [pendingDecisionAction, setPendingDecisionAction] = useState<InvitationDecisionAction | null>(null);
+  const [pendingDecisionAnchor, setPendingDecisionAnchor] = useState<PromptAnchor | null>(null);
   const [isDecisionSubmitting, setIsDecisionSubmitting] = useState(false);
   const [isTimelineSubmitting, setIsTimelineSubmitting] = useState(false);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
@@ -136,11 +138,25 @@ export function InvitationDetailsPage() {
       const success = successMessages[action];
       toast.success(success.message, success.title);
       setPendingDecisionAction(null);
+      setPendingDecisionAnchor(null);
     } catch (reason: unknown) {
       toast.error(getErrorMessage(reason));
     } finally {
       setIsDecisionSubmitting(false);
     }
+  };
+
+  const openDecisionPrompt = (action: InvitationDecisionAction, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    setPendingDecisionAnchor({
+      top: rect.top,
+      bottom: rect.bottom,
+      left: rect.left,
+      right: rect.right,
+      width: rect.width,
+      height: rect.height
+    });
+    setPendingDecisionAction(action);
   };
 
   const submitTimelineEntry = async (payload: { mode: "comment" | "internal_note"; body: string }) => {
@@ -298,7 +314,7 @@ export function InvitationDetailsPage() {
                 <button
                   type="button"
                   disabled={isDecisionSubmitting}
-                  onClick={() => setPendingDecisionAction("accept")}
+                  onClick={(event) => openDecisionPrompt("accept", event.currentTarget)}
                   className="w-full rounded-md bg-white/10 px-4 py-3 text-left text-sm font-semibold text-white transition hover:bg-white/16 disabled:opacity-60"
                 >
                   {isDecisionSubmitting && pendingDecisionAction === "accept" ? "Processing..." : "Accept Invitation"}
@@ -309,7 +325,7 @@ export function InvitationDetailsPage() {
                 <button
                   type="button"
                   disabled={isDecisionSubmitting}
-                  onClick={() => setPendingDecisionAction("confirm")}
+                  onClick={(event) => openDecisionPrompt("confirm", event.currentTarget)}
                   className="w-full rounded-md bg-white/10 px-4 py-3 text-left text-sm font-semibold text-white transition hover:bg-white/16 disabled:opacity-60"
                 >
                   {isDecisionSubmitting && pendingDecisionAction === "confirm" ? "Processing..." : "Confirm Attendance"}
@@ -320,7 +336,7 @@ export function InvitationDetailsPage() {
                 <button
                   type="button"
                   disabled={isDecisionSubmitting}
-                  onClick={() => setPendingDecisionAction("revert")}
+                  onClick={(event) => openDecisionPrompt("revert", event.currentTarget)}
                   className="w-full rounded-md border border-white/10 px-4 py-3 text-left text-sm font-semibold text-white disabled:opacity-60"
                 >
                   {isDecisionSubmitting && pendingDecisionAction === "revert" ? "Processing..." : "Revert Decision"}
@@ -331,7 +347,7 @@ export function InvitationDetailsPage() {
                 <button
                   type="button"
                   disabled={isDecisionSubmitting}
-                  onClick={() => setPendingDecisionAction("decline")}
+                  onClick={(event) => openDecisionPrompt("decline", event.currentTarget)}
                   className="w-full rounded-md border border-[rgba(235,87,87,0.35)] px-4 py-3 text-left text-sm font-semibold text-[#ffb8b2] disabled:opacity-60"
                 >
                   {isDecisionSubmitting && pendingDecisionAction === "decline" ? "Processing..." : "Decline Invitation"}
@@ -445,42 +461,30 @@ export function InvitationDetailsPage() {
         onClose={() => setPreviewFile(null)}
       />
 
-      {pendingDecisionAction ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 px-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-lg dark:border-slate-800 dark:bg-slate-950">
-            <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {pendingDecisionAction === "revert" ? "Revert Decision?" : "Confirm Action"}
-            </h4>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              {pendingDecisionAction === "revert"
-                ? "This will return the record to the previous review stage and restore available decision options."
-                : pendingDecisionAction === "accept"
-                  ? "Accept this invitation? This moves it to Accepted."
-                  : pendingDecisionAction === "decline"
-                    ? "Decline this invitation? This moves it to Declined."
-                    : "Confirm attendance for this invitation? This moves it to Confirmed Attendance."}
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingDecisionAction(null)}
-                disabled={isDecisionSubmitting}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void runDecisionAction(pendingDecisionAction)}
-                disabled={isDecisionSubmitting}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60 dark:bg-cyan-500 dark:text-slate-900"
-              >
-                {isDecisionSubmitting ? "Processing..." : "Confirm"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ContextActionPrompt
+        open={Boolean(pendingDecisionAction)}
+        anchor={pendingDecisionAnchor}
+        title={pendingDecisionAction === "revert" ? "Revert Decision?" : "Confirm Action"}
+        message={
+          pendingDecisionAction === "revert"
+            ? "This will return the record to the previous review stage and restore available decision options."
+            : pendingDecisionAction === "accept"
+              ? "Accept this invitation? This moves it to Accepted."
+              : pendingDecisionAction === "decline"
+                ? "Decline this invitation? This moves it to Declined."
+                : "Confirm attendance for this invitation? This moves it to Confirmed Attendance."
+        }
+        isSubmitting={isDecisionSubmitting}
+        onCancel={() => {
+          setPendingDecisionAction(null);
+          setPendingDecisionAnchor(null);
+        }}
+        onConfirm={() => {
+          if (pendingDecisionAction) {
+            void runDecisionAction(pendingDecisionAction);
+          }
+        }}
+      />
     </div>
   );
 }

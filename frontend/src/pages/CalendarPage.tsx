@@ -11,6 +11,11 @@ function getErrorMessage(reason: unknown) {
   return reason instanceof Error ? reason.message : "Unable to load calendar";
 }
 
+function getDateKey(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 export function CalendarPage() {
   const [monthEvents, setMonthEvents] = useState<InvitationRecord[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<InvitationRecord[]>([]);
@@ -19,6 +24,7 @@ export function CalendarPage() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [selected, setSelected] = useState<InvitationRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,6 +47,12 @@ export function CalendarPage() {
         setMonthEvents(calendarEvents);
         setUpcomingEvents(allUpcoming.results ?? []);
         setNext7Days(sevenDayEvents ?? []);
+        const today = new Date();
+        const todayKey =
+          currentMonth.getFullYear() === today.getFullYear() && currentMonth.getMonth() === today.getMonth()
+            ? getDateKey(today)
+            : null;
+        setSelectedDateKey((current) => current ?? todayKey ?? (calendarEvents[0] ? getDateKey(calendarEvents[0].event_date) : getDateKey(currentMonth)));
         setError(null);
       })
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
@@ -55,8 +67,7 @@ export function CalendarPage() {
     const eventsByDate = new Map<string, InvitationRecord[]>();
 
     monthEvents.forEach((event) => {
-      const eventDate = new Date(event.event_date);
-      const key = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}-${String(eventDate.getDate()).padStart(2, "0")}`;
+      const key = getDateKey(event.event_date);
       const existing = eventsByDate.get(key) ?? [];
       existing.push(event);
       eventsByDate.set(key, existing);
@@ -79,6 +90,18 @@ export function CalendarPage() {
   }, [currentMonth, monthEvents]);
 
   const pendingInvitations = upcomingEvents.filter((item) => item.status === "pending_review").slice(0, 1);
+  const selectedDayEvents = useMemo(
+    () => (selectedDateKey ? monthEvents.filter((event) => getDateKey(event.event_date) === selectedDateKey) : []),
+    [monthEvents, selectedDateKey]
+  );
+  const selectedDayLabel = useMemo(() => {
+    if (!selectedDateKey) {
+      return null;
+    }
+    const [year, month, day] = selectedDateKey.split("-").map(Number);
+    return formatDate(new Date(year, month - 1, day).toISOString());
+  }, [selectedDateKey]);
+  const monthKey = `${currentMonth.getFullYear()}-${currentMonth.getMonth()}`;
 
   if (error) {
     return <StatePanel variant="error" title="Calendar unavailable" message={error} />;
@@ -104,13 +127,13 @@ export function CalendarPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex rounded-md bg-[var(--surface-low)] p-1">
-              <button type="button" className="rounded-sm bg-[var(--surface-card)] px-4 py-2 text-xs font-semibold text-[var(--accent)]">
+              <button type="button" className="interactive-press rounded-sm bg-[var(--surface-card)] px-4 py-2 text-xs font-semibold text-[var(--accent)]">
                 Month
               </button>
-              <button type="button" disabled className="px-4 py-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-70">
+              <button type="button" disabled className="interactive-press px-4 py-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-70">
                 Week
               </button>
-              <button type="button" disabled className="px-4 py-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-70">
+              <button type="button" disabled className="interactive-press px-4 py-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-70">
                 Day
               </button>
             </div>
@@ -119,17 +142,17 @@ export function CalendarPage() {
               <button
                 type="button"
                 onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                className="secondary-button rounded-md p-2"
+                className="secondary-button interactive-press rounded-md p-2"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <div className="metric-strip rounded-md px-5 py-2.5 text-sm font-semibold text-[var(--ink)]">
+              <div className="metric-strip page-enter rounded-md px-5 py-2.5 text-sm font-semibold text-[var(--ink)]" key={monthKey}>
                 {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
               </div>
               <button
                 type="button"
                 onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                className="secondary-button rounded-md p-2"
+                className="secondary-button interactive-press rounded-md p-2"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -143,19 +166,27 @@ export function CalendarPage() {
           ))}
         </div>
 
-        <div className="mt-4 grid grid-cols-7 overflow-hidden rounded-xl border border-[var(--line)]">
+        <div key={monthKey} className="page-enter mt-4 grid grid-cols-7 overflow-hidden rounded-xl border border-[var(--line)]">
           {monthCells.map((cell, index) => {
             const isToday =
               cell.day &&
               currentMonth.getFullYear() === new Date().getFullYear() &&
               currentMonth.getMonth() === new Date().getMonth() &&
               cell.day === new Date().getDate();
+            const isSelected = Boolean(cell.dateKey && selectedDateKey === cell.dateKey);
 
             return (
               <div
                 key={`${cell.day ?? "blank"}-${index}`}
-                className={`min-h-[8.2rem] border-b border-r border-[var(--line)] p-3 ${
+                onClick={() => {
+                  if (cell.dateKey) {
+                    setSelectedDateKey(cell.dateKey);
+                  }
+                }}
+                className={`calendar-cell min-h-[8.2rem] border-b border-r border-[var(--line)] p-3 ${
                   cell.day ? "bg-[var(--surface-card)]" : "bg-[var(--surface-low)]/70"
+                } ${isSelected ? "calendar-cell-active" : ""} ${cell.day ? "cursor-pointer" : ""} ${
+                  cell.dateKey ? "page-enter" : ""
                 }`}
               >
                 {cell.day ? (
@@ -165,12 +196,21 @@ export function CalendarPage() {
                 ) : null}
 
                 <div className="mt-3 space-y-2">
+                  {cell.events.length ? (
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
+                      {cell.events.length} event{cell.events.length === 1 ? "" : "s"}
+                    </p>
+                  ) : null}
                   {cell.events.slice(0, 2).map((event) => (
                     <button
                       key={event.id}
                       type="button"
-                      onClick={() => setSelected(event)}
-                      className={`block w-full truncate rounded-sm px-2 py-1 text-left text-[10px] font-bold uppercase tracking-[0.08em] ${
+                      onClick={(eventClick) => {
+                        eventClick.stopPropagation();
+                        setSelectedDateKey(cell.dateKey);
+                        setSelected(event);
+                      }}
+                      className={`interactive-lift interactive-press block w-full truncate rounded-sm px-2 py-1 text-left text-[10px] font-bold uppercase tracking-[0.08em] ${
                         event.status === "declined"
                           ? "bg-[#fe8983]/20 text-[#752121]"
                           : event.status === "accepted" || event.status === "confirmed_attendance"
@@ -189,6 +229,42 @@ export function CalendarPage() {
       </section>
 
       <aside className="space-y-6">
+        <section className="surface-panel interactive-lift rounded-xl p-6">
+          <p className="section-kicker">Selected Day</p>
+          <p className="mt-2 text-sm font-semibold text-[var(--ink)]">{selectedDayLabel ?? "Choose a day"}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {selectedDayEvents.length
+              ? `${selectedDayEvents.length} scheduled event${selectedDayEvents.length === 1 ? "" : "s"}`
+              : "No scheduled invitations for this date."}
+          </p>
+
+          <div className="mt-5 space-y-3">
+            {selectedDayEvents.length ? (
+              selectedDayEvents.map((event) => (
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => setSelected(event)}
+                  className="interactive-lift interactive-press block w-full rounded-xl bg-[var(--surface-low)] px-4 py-4 text-left"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--ink)]">{event.event_title}</p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(event.event_date)}</p>
+                    </div>
+                    <StatusBadge status={event.status_display} />
+                  </div>
+                  <p className="mt-2 text-xs text-[var(--muted)]">{event.location}</p>
+                </button>
+              ))
+            ) : (
+              <div className="rounded-xl bg-[var(--surface-low)] px-4 py-4 text-sm text-[var(--muted)]">
+                Select another date or move to a different month to explore scheduled invitations.
+              </div>
+            )}
+          </div>
+        </section>
+
         <section className="surface-panel rounded-xl p-6">
           <p className="section-kicker">Upcoming in 7 Days</p>
           <p className="mt-2 text-sm font-semibold text-[var(--ink)]">
@@ -204,7 +280,7 @@ export function CalendarPage() {
                   key={event.id}
                   type="button"
                   onClick={() => setSelected(event)}
-                  className="block w-full rounded-xl bg-[var(--surface-low)] px-4 py-4 text-left"
+                  className="interactive-lift interactive-press block w-full rounded-xl bg-[var(--surface-low)] px-4 py-4 text-left"
                 >
                   <p className="text-sm font-semibold text-[var(--ink)]">{event.event_title}</p>
                   <p className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(event.event_date)}</p>
@@ -222,15 +298,15 @@ export function CalendarPage() {
           <div className="mt-5 space-y-4">
             {pendingInvitations.length ? (
               pendingInvitations.map((event) => (
-                <div key={event.id} className="rounded-xl bg-[var(--surface-low)] p-4">
+                <div key={event.id} className="interactive-lift rounded-xl bg-[var(--surface-low)] p-4">
                   <p className="text-sm font-semibold text-[var(--ink)]">{event.event_title}</p>
                   <p className="mt-2 text-xs text-[var(--muted)]">{event.contact_person || event.inviting_organization}</p>
                   <p className="mt-1 text-xs text-[var(--muted)]">{event.location}</p>
                   <div className="mt-4 flex gap-2">
-                    <Link to={`/invitations/${event.id}`} className="primary-button flex-1 rounded-md px-3 py-2 text-center text-xs font-semibold">
+                    <Link to={`/invitations/${event.id}`} className="primary-button interactive-press flex-1 rounded-md px-3 py-2 text-center text-xs font-semibold">
                       Review
                     </Link>
-                    <button type="button" onClick={() => setSelected(event)} className="secondary-button flex-1 rounded-md px-3 py-2 text-xs font-semibold">
+                    <button type="button" onClick={() => setSelected(event)} className="secondary-button interactive-press flex-1 rounded-md px-3 py-2 text-xs font-semibold">
                       Open
                     </button>
                   </div>
@@ -241,7 +317,7 @@ export function CalendarPage() {
             )}
           </div>
 
-          <Link to="/invitations" className="primary-button mt-8 inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold">
+          <Link to="/invitations" className="primary-button interactive-press mt-8 inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold">
             <Plus className="h-4 w-4" />
             Open Invitations
           </Link>
@@ -249,14 +325,14 @@ export function CalendarPage() {
       </aside>
 
       {selected ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/40 backdrop-blur-sm">
-          <div className="h-full w-full max-w-md border-l border-[var(--line)] bg-[var(--surface-card)] p-5">
+        <div className="backdrop-enter fixed inset-0 z-50 flex justify-end bg-slate-950/40 backdrop-blur-sm">
+          <div className="drawer-enter h-full w-full max-w-md border-l border-[var(--line)] bg-[var(--surface-card)] p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="headline-font text-xl font-bold tracking-[-0.04em] text-[var(--ink)]">{selected.event_title}</h3>
                 <p className="mt-1 text-sm text-[var(--muted)]">{selected.inviting_organization}</p>
               </div>
-              <button type="button" onClick={() => setSelected(null)} className="secondary-button rounded-md px-3 py-1.5 text-xs font-semibold">
+              <button type="button" onClick={() => setSelected(null)} className="secondary-button interactive-press rounded-md px-3 py-1.5 text-xs font-semibold">
                 Close
               </button>
             </div>
@@ -269,7 +345,7 @@ export function CalendarPage() {
               </div>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Link to={`/invitations/${selected.id}`} className="primary-button rounded-md px-4 py-2 text-sm font-semibold">
+              <Link to={`/invitations/${selected.id}`} className="primary-button interactive-press rounded-md px-4 py-2 text-sm font-semibold">
                 Open Details
               </Link>
             </div>

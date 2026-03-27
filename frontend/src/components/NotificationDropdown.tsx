@@ -71,7 +71,7 @@ export function NotificationDropdown({
                   key={item.id}
                   type="button"
                   onClick={() => onItemClick(item)}
-                  className={`flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left transition hover:-translate-y-[1px] ${
+                  className={`interactive-lift interactive-press flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left ${
                     item.is_read ? "bg-[var(--surface-card)]" : "bg-[var(--surface-low)]"
                   }`}
                 >
