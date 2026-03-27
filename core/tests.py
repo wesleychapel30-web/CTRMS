@@ -62,6 +62,23 @@ class CoreApiTests(TestCase):
         self.assertTrue(response.json()['authenticated'])
         self.assertEqual(response.json()['user']['username'], 'dashboard-user')
 
+    def test_session_login_accepts_email_identifier(self):
+        user = User.objects.create_user(
+            username='email-login-user',
+            email='email-login@example.com',
+            password='StrongPass1',
+        )
+
+        response = self.client.post(
+            reverse('api_session_login'),
+            data=json.dumps({'username': user.email, 'password': 'StrongPass1'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
+        self.assertEqual(response.json()['user']['username'], user.username)
+
     def test_dashboard_overview_returns_stats(self):
         user = User.objects.create_user(
             username='api-user',

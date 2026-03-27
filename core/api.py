@@ -592,8 +592,14 @@ def session_login(request):
     except json.JSONDecodeError:
         data = request.POST
 
-    username = data.get('username', '').strip()
+    identifier = data.get('username', '').strip()
     password = data.get('password', '')
+    username = identifier
+    if identifier and '@' in identifier:
+        matched_username = User.objects.filter(email__iexact=identifier).values_list('username', flat=True).first()
+        if matched_username:
+            username = matched_username
+
     user = authenticate(request, username=username, password=password)
 
     if user is None:
