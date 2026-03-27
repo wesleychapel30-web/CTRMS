@@ -104,8 +104,9 @@ export function ReportsPage() {
             <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 outline-none dark:border-slate-700 dark:bg-slate-900">
               <option value="">All categories</option>
               <option value="tuition">Tuition</option>
-              <option value="medical">Medical</option>
-              <option value="construction">Construction</option>
+              <option value="medical">Medical Support</option>
+              <option value="construction">Construction Aid</option>
+              <option value="event_sponsorship">Event Sponsorship</option>
               <option value="other">Other</option>
             </select>
           </label>

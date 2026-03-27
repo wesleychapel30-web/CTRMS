@@ -1,5 +1,5 @@
 import { Funnel, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { DataTable } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
@@ -9,6 +9,14 @@ import { useSession } from "../context/SessionContext";
 import { buildApiUrl, fetchRequests } from "../lib/api";
 import { formatCurrency, formatDate } from "../lib/format";
 import type { RequestRecord } from "../types";
+
+const requestCategoryOptions = [
+  { value: "tuition", label: "Tuition" },
+  { value: "medical", label: "Medical Support" },
+  { value: "construction", label: "Construction Aid" },
+  { value: "event_sponsorship", label: "Event Sponsorship" },
+  { value: "other", label: "Other" }
+] as const;
 
 export function RequestsPage() {
   const { hasPermission } = useSession();
@@ -46,11 +54,6 @@ export function RequestsPage() {
   useEffect(() => {
     setPage(1);
   }, [search, status, category]);
-
-  const categoryOptions = useMemo(() => {
-    const values = new Set(rows.map((row) => row.category));
-    return Array.from(values);
-  }, [rows]);
 
   const sort = ordering
     ? {
@@ -108,9 +111,9 @@ export function RequestsPage() {
             <Funnel className="h-4 w-4" />
             <select value={category} onChange={(event) => setCategory(event.target.value)} className="w-full bg-transparent outline-none">
               <option value="">All categories</option>
-              {categoryOptions.map((value) => (
-                <option key={value} value={value}>
-                  {value}
+              {requestCategoryOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

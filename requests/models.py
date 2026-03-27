@@ -9,12 +9,13 @@ import os
 
 
 class Request(models.Model):
-    """Request model for assistance requests (tuition, medical, construction, etc.)"""
+    """Request model for assistance requests such as tuition, medical, construction, and event sponsorship."""
     
     class Category(models.TextChoices):
         TUITION = 'tuition', _('Tuition')
         MEDICAL = 'medical', _('Medical Support')
         CONSTRUCTION = 'construction', _('Construction Aid')
+        EVENT_SPONSORSHIP = 'event_sponsorship', _('Event Sponsorship')
         OTHER = 'other', _('Other')
     
     class Status(models.TextChoices):

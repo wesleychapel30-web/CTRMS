@@ -19,6 +19,7 @@ def suggest_request_category(text: str) -> str:
     tuition_keywords = ["tuition", "school", "fees", "university", "college", "semester", "exam"]
     medical_keywords = ["medical", "hospital", "surgery", "treatment", "clinic", "medicine", "doctor"]
     construction_keywords = ["construction", "build", "building", "renovation", "roof", "cement", "materials"]
+    sponsorship_keywords = ["event", "sponsorship", "sponsor", "conference", "seminar", "workshop", "ceremony", "fundraiser"]
 
     if any(k in hay for k in tuition_keywords):
         return Request.Category.TUITION
@@ -26,5 +27,6 @@ def suggest_request_category(text: str) -> str:
         return Request.Category.MEDICAL
     if any(k in hay for k in construction_keywords):
         return Request.Category.CONSTRUCTION
+    if any(k in hay for k in sponsorship_keywords):
+        return Request.Category.EVENT_SPONSORSHIP
     return Request.Category.OTHER
-

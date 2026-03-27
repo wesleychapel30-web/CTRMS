@@ -8,6 +8,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from requests.models import Request, RequestDocument
+from requests.services import suggest_request_category
 from core.models import NotificationReceipt, Permission, RecordTimelineEntry, RoleDefinition, RolePermission, UserRole
 from core.rbac_defaults import seed_rbac_defaults
 
@@ -32,6 +33,25 @@ class RequestModelTests(TestCase):
 
         self.assertTrue(request_obj.request_id.startswith('REQ-'))
         self.assertEqual(request_obj.remaining_balance, 500)
+
+    def test_event_sponsorship_category_display_is_available(self):
+        request_obj = Request.objects.create(
+            applicant_name='Event Sponsor',
+            applicant_email='event@example.com',
+            applicant_phone='123456789',
+            applicant_id='ID-002',
+            address='Nairobi',
+            category=Request.Category.EVENT_SPONSORSHIP,
+            description='Need event sponsorship support',
+            amount_requested=2000,
+        )
+
+        self.assertEqual(request_obj.category, Request.Category.EVENT_SPONSORSHIP)
+        self.assertEqual(request_obj.get_category_display(), 'Event Sponsorship')
+
+    def test_suggest_request_category_detects_event_sponsorship(self):
+        suggested = suggest_request_category('Requesting sponsorship for a youth event and workshop')
+        self.assertEqual(suggested, Request.Category.EVENT_SPONSORSHIP)
 
 
 class RequestWorkflowTests(TestCase):

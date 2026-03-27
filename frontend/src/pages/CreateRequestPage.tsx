@@ -168,6 +168,9 @@ export function CreateRequestPage() {
             <option value="construction" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
               Construction Aid
             </option>
+            <option value="event_sponsorship" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+              Event Sponsorship
+            </option>
             <option value="other" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
               Other
             </option>
