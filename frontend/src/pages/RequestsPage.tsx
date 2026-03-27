@@ -1,4 +1,4 @@
-import { Funnel, Search } from "lucide-react";
+import { Funnel, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { DataTable } from "../components/DataTable";
@@ -79,20 +79,34 @@ export function RequestsPage() {
   const excelExportUrl = buildApiUrl(`/export/requests-excel/${exportSuffix}`);
   const pdfExportUrl = buildApiUrl(`/export/requests-pdf/${exportSuffix}`);
   const canExport = hasPermission("report:export");
+  const canCreateRequest = hasPermission("request:create");
 
   return (
     <div className="space-y-6">
       <SectionCard
         title="Requests Management"
         subtitle="Monitor request lifecycles from draft through completion."
-        action={canExport ? (
+        action={canExport || canCreateRequest ? (
           <div className="flex gap-2">
-            <a href={excelExportUrl} className="rounded-sm bg-[var(--surface-low)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">
-              Export Excel
-            </a>
-            <a href={pdfExportUrl} className="primary-button rounded-sm px-4 py-2 text-sm font-semibold">
-              Export PDF
-            </a>
+            {canCreateRequest ? (
+              <Link
+                to="/requests/new"
+                className="primary-button inline-flex items-center gap-2 rounded-sm px-4 py-2 text-sm font-semibold"
+              >
+                <Plus className="h-4 w-4" />
+                Create Request
+              </Link>
+            ) : null}
+            {canExport ? (
+              <a href={excelExportUrl} className="rounded-sm bg-[var(--surface-low)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">
+                Export Excel
+              </a>
+            ) : null}
+            {canExport ? (
+              <a href={pdfExportUrl} className="primary-button rounded-sm px-4 py-2 text-sm font-semibold">
+                Export PDF
+              </a>
+            ) : null}
           </div>
         ) : undefined}
       >

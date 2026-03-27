@@ -6,15 +6,13 @@ import {
   LayoutDashboard,
   ReceiptText,
   Settings,
-  Users,
-  UserPlus2
+  Users
 } from "lucide-react";
 import type { NavItem } from "../types";
 
 export const navItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard, group: "Core", requires: ["dashboard:view"] },
   { label: "Requests", href: "/requests", icon: ReceiptText, group: "Core", requires: ["request:view_all", "request:view_own", "payment:view", "payment:record"] },
-  { label: "Create Request", href: "/requests/new", icon: UserPlus2, group: "Core", requires: ["request:create"] },
   { label: "Invitations", href: "/invitations", icon: CalendarDays, group: "Core", requires: ["invitation:view_all", "invitation:view_own"] },
   { label: "Calendar", href: "/calendar", icon: CalendarDays, group: "Core", requires: ["invitation:view_all", "invitation:view_own"] },
   { label: "Payments", href: "/payments", icon: CreditCard, group: "Finance & Reporting", requires: ["payment:view", "payment:record"] },
