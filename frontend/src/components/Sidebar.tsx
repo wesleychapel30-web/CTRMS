@@ -1,5 +1,6 @@
 import { Building2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { resolveAssetUrl } from "../lib/api";
 import type { BrandingSettings, NavItem, SessionUser } from "../types";
 
 type SidebarProps = {
@@ -59,6 +60,7 @@ export function Sidebar({ items, user, branding, onLogout, isOpen, onClose }: Si
   const roleKeys = [...new Set([...(user?.roles ?? []), user?.role].filter(Boolean))];
   const primaryVisibleRole = prioritizedRoles.find((role) => roleKeys.includes(role)) ?? user?.role ?? "";
   const userRoleLabel = roleLabelMap[primaryVisibleRole] ?? "User";
+  const logoUrl = resolveAssetUrl(branding?.logo_url);
 
   return (
     <>
@@ -74,9 +76,9 @@ export function Sidebar({ items, user, branding, onLogout, isOpen, onClose }: Si
         <div className="flex h-full flex-col">
           <div className="px-4 py-4">
             <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 flex-shrink-0 place-items-center overflow-hidden rounded-full bg-white p-1 text-[var(--accent)] shadow-[0_0_0_1px_rgba(255,255,255,0.24),0_10px_24px_rgba(0,0,0,0.22)]">
-                {branding?.logo_url ? (
-                  <img src={branding.logo_url} alt={branding.organization_name} className="h-full w-full rounded-full object-contain" />
+              <div className="grid h-12 w-12 flex-shrink-0 place-items-center overflow-hidden rounded-xl bg-white p-1.5 text-[var(--accent)] shadow-[0_0_0_1px_rgba(255,255,255,0.28),0_10px_24px_rgba(0,0,0,0.22)]">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={branding?.organization_name ?? "CTRMS"} className="max-h-full max-w-full object-contain" />
                 ) : (
                   <Building2 className="h-5 w-5" />
                 )}

@@ -2,7 +2,7 @@ import { Bell, Building2, Mail, Palette, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { InlineBanner, StatePanel } from "../components/FeedbackStates";
 import { SectionCard } from "../components/SectionCard";
-import { changeOwnPassword, fetchSystemSettings, sendInvitationReminders, sendTestEmail, updateSystemSettings, uploadOrganizationAssets } from "../lib/api";
+import { changeOwnPassword, fetchSystemSettings, resolveAssetUrl, sendInvitationReminders, sendTestEmail, updateSystemSettings, uploadOrganizationAssets } from "../lib/api";
 import { useSession } from "../context/SessionContext";
 import { useToast } from "../context/ToastContext";
 import type { SettingsOverview } from "../types";
@@ -614,11 +614,13 @@ function ToggleField({
 }
 
 function AssetTile({ label, url }: { label: string; url?: string }) {
+  const resolvedUrl = resolveAssetUrl(url);
+
   return (
     <div className="rounded-xl bg-[var(--surface-low)] p-4">
       <p className="section-kicker">{label}</p>
       <div className="mt-4 grid min-h-[10rem] place-items-center rounded-lg bg-[var(--surface-card)] p-4">
-        {url ? <img src={url} alt={label} className="max-h-28 w-auto object-contain" /> : <span className="text-sm text-[var(--muted)]">Not set</span>}
+        {resolvedUrl ? <img src={resolvedUrl} alt={label} className="max-h-28 w-auto object-contain" /> : <span className="text-sm text-[var(--muted)]">Not set</span>}
       </div>
     </div>
   );

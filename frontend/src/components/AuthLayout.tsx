@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { resolveAssetUrl } from "../lib/api";
 import type { BrandingSettings } from "../types";
 
 type AuthLayoutProps = {
@@ -9,6 +10,8 @@ type AuthLayoutProps = {
 };
 
 export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
+  const logoUrl = resolveAssetUrl(branding?.logo_url);
+
   return (
     <div className="auth-blue-shell relative min-h-screen overflow-hidden px-5 py-8 text-white">
       <div className="auth-blue-bg pointer-events-none absolute inset-0 overflow-hidden">
@@ -31,11 +34,11 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
           <div className="auth-stage-dots" />
 
           <div className="auth-brand-lockup absolute left-6 top-6 z-[2] flex items-center gap-3 sm:left-10 sm:top-9">
-            {branding?.logo_url ? (
+            {logoUrl ? (
               <div className="grid h-14 w-14 place-items-center rounded-xl bg-white p-2 shadow-[0_12px_28px_rgba(0,0,0,0.24)]">
                 <img
-                  src={branding.logo_url}
-                  alt={branding.organization_name || "CTRMS"}
+                  src={logoUrl}
+                  alt={branding?.organization_name || "CTRMS"}
                   className="max-h-10 w-auto object-contain"
                 />
               </div>
