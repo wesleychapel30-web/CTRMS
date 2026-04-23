@@ -1,4 +1,4 @@
-import { Download, FileText } from "lucide-react";
+import { CheckCircle2, CircleHelp, Download, FileText, UserCheck, XCircle } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { AttachmentPreviewPanel } from "../components/AttachmentPreviewPanel";
@@ -14,11 +14,17 @@ import {
   addRequestTimelineEntry,
   addRequestPayment,
   approveRequest,
+  buildAttachmentPreviewUrl,
   cancelRequest,
   completeRequestPayment,
   fetchRequest,
+  financeMarkPendingPayment,
+  financeRaiseQuery,
+  financeStartProcessing,
   markRequestPaid,
   rejectRequest,
+  requestClarification,
+  resolveAssetUrl,
   restoreRequest,
   reverseRequest,
   startRequestReview,
@@ -32,12 +38,24 @@ type RequestWorkflowAction =
   | "start-review"
   | "approve"
   | "reject"
+  | "request-clarification"
+  | "finance-start-processing"
+  | "finance-raise-query"
+  | "finance-pending-payment"
   | "record-payment"
   | "add-payment"
   | "mark-completed"
   | "cancel"
   | "restore"
   | "reverse";
+
+function getRequestDocumentPreviewUrl(document: { download_url?: string; document: string }) {
+  return buildAttachmentPreviewUrl(document.download_url, document.document);
+}
+
+function getRequestDocumentDownloadUrl(document: { download_url?: string; document: string }) {
+  return resolveAssetUrl(document.download_url ?? document.document);
+}
 
 export function RequestDetailsPage() {
   const { requestId } = useParams();
@@ -54,6 +72,7 @@ export function RequestDetailsPage() {
   const [uploadType, setUploadType] = useState("Supporting Document");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [adminComment, setAdminComment] = useState("");
+  const [financeNotes, setFinanceNotes] = useState("");
   const [previewFile, setPreviewFile] = useState<{ title: string; fileName?: string; fileUrl: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<RequestWorkflowAction | null>(null);
   const [pendingActionAnchor, setPendingActionAnchor] = useState<PromptAnchor | null>(null);
@@ -97,7 +116,7 @@ export function RequestDetailsPage() {
   }
 
   if (isLoading || !requestRecord) {
-    return <StatePanel variant="loading" title="Loading request" message="Preparing applicant details, attachments, and workflow history." />;
+    return <StatePanel variant="loading" title="Loading request" message="Loading details and attachments." />;
   }
 
   const isDirector = hasRole("director");
@@ -105,6 +124,7 @@ export function RequestDetailsPage() {
   const canReject = isDirector && hasPermission("request:reject");
   const canStartReview = hasPermission("request:update_all") || hasPermission("request:update_own");
   const canDecide = canApprove || canReject;
+  const canProcessFinance = hasPermission("payment:record");
   const canRecordPayment = hasPermission("payment:record");
   const canUploadDocuments = hasPermission("request:upload_all") || hasPermission("request:upload_own");
   const canCancel = hasPermission("request:cancel");
@@ -114,20 +134,29 @@ export function RequestDetailsPage() {
   const showStartReview = canStartReview && visibility.showStartReview;
   const showApprove = canApprove && visibility.showApprove;
   const showReject = canReject && visibility.showReject;
+  const showRequestClarification = canApprove && visibility.showRequestClarification;
+  const showFinanceStartProcessing = canProcessFinance && visibility.showFinanceStartProcessing;
+  const showFinanceRaiseQuery = canProcessFinance && visibility.showFinanceRaiseQuery;
+  const showFinancePendingPayment = canProcessFinance && visibility.showFinancePendingPayment;
   const showRecordPayment = canRecordPayment && visibility.showRecordPayment;
   const showAddPayment = canRecordPayment && visibility.showAddPayment;
   const showMarkCompleted = canRecordPayment && visibility.showMarkCompleted;
   const showCancel = canCancel && visibility.showCancel;
   const showRestore = canRestore && visibility.showRestore;
   const showReverse = canReverse && visibility.showReverse;
+  const showFinancePanel = showFinanceStartProcessing || showFinanceRaiseQuery || showFinancePendingPayment;
   const canUploadForStatus = !["cancelled", "archived"].includes(requestRecord.status);
   const remainingBalance = (requestRecord.approved_amount ?? 0) - (requestRecord.disbursed_amount ?? 0);
   const canComposeTimeline = hasRole("director") || hasRole("admin");
 
   const actionSuccessMessages: Record<RequestWorkflowAction, { title: string; message: string }> = {
     "start-review": { title: "Request updated", message: "Request moved to under review." },
-    approve: { title: "Request approved", message: "Request approved successfully." },
+    approve: { title: "Request approved", message: "Request approved and forwarded to Finance." },
     reject: { title: "Request rejected", message: "Request rejected successfully." },
+    "request-clarification": { title: "Clarification requested", message: "Request returned for clarification." },
+    "finance-start-processing": { title: "Finance processing", message: "Finance processing started." },
+    "finance-raise-query": { title: "Query raised", message: "Finance query raised." },
+    "finance-pending-payment": { title: "Payment scheduled", message: "Request moved to pending payment." },
     "record-payment": { title: "Payment recorded", message: "Payment recorded successfully." },
     "add-payment": { title: "Payment recorded", message: "Additional payment recorded successfully." },
     "mark-completed": { title: "Payment completed", message: "Payment marked as completed." },
@@ -149,6 +178,18 @@ export function RequestDetailsPage() {
         await approveRequest(requestRecord.id, Number(approvedAmount || requestRecord.amount_requested), notes);
       } else if (action === "reject") {
         await rejectRequest(requestRecord.id, notes);
+      } else if (action === "request-clarification") {
+        await requestClarification(requestRecord.id, notes);
+      } else if (action === "finance-start-processing") {
+        await financeStartProcessing(requestRecord.id, financeNotes);
+      } else if (action === "finance-raise-query") {
+        await financeRaiseQuery(requestRecord.id, financeNotes);
+      } else if (action === "finance-pending-payment") {
+        await financeMarkPendingPayment(
+          requestRecord.id,
+          financeNotes,
+          approvedAmount.trim() ? Number(approvedAmount) : undefined
+        );
       } else if (action === "record-payment") {
         await markRequestPaid(
           requestRecord.id,
@@ -227,6 +268,10 @@ export function RequestDetailsPage() {
     if (pendingAction === "start-review") return "Move To Review";
     if (pendingAction === "approve") return "Approve Request";
     if (pendingAction === "reject") return "Reject Request";
+    if (pendingAction === "request-clarification") return "Request Clarification";
+    if (pendingAction === "finance-start-processing") return "Start Finance Processing";
+    if (pendingAction === "finance-raise-query") return "Raise Finance Query";
+    if (pendingAction === "finance-pending-payment") return "Schedule Payment";
     if (pendingAction === "record-payment") return "Record Payment";
     if (pendingAction === "add-payment") return "Add Payment";
     if (pendingAction === "mark-completed") return "Mark Completed";
@@ -236,10 +281,10 @@ export function RequestDetailsPage() {
   })();
 
   return (
-    <div className="grid grid-cols-12 gap-8">
-      <div className="col-span-12 space-y-8 lg:col-span-8">
+    <div className="grid grid-cols-12 gap-5">
+      <div className="col-span-12 space-y-4 lg:col-span-8">
         <DetailSectionCard title="Applicant Information">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-3">
             <Field label="Name" value={requestRecord.applicant_name} />
             <Field label="Phone" value={requestRecord.applicant_phone} />
             <Field label="Email" value={requestRecord.applicant_email} />
@@ -250,7 +295,7 @@ export function RequestDetailsPage() {
         </DetailSectionCard>
 
         <DetailSectionCard title="Request Information">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-3">
             <Field label="Request ID" value={requestRecord.request_id} />
             <Field label="Category" value={requestRecord.category_display} />
             <Field label="Current Status" value={<StatusBadge status={requestRecord.status_display} />} />
@@ -258,9 +303,9 @@ export function RequestDetailsPage() {
             <Field label="Beneficiaries" value={requestRecord.number_of_beneficiaries ?? "N/A"} />
             <Field label="Location" value={requestRecord.address} />
           </div>
-          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-            <p className="headline-font text-lg font-bold tracking-[-0.03em] text-[var(--ink)]">{requestRecord.title || "Untitled request"}</p>
-            <p className="mt-2">{requestRecord.description}</p>
+          <div className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--surface-low)] p-3 text-sm leading-6 text-[var(--ink)]">
+            <p className="headline-font text-sm font-bold tracking-[-0.02em] text-[var(--ink)]">{requestRecord.title || "Untitled request"}</p>
+            <p className="mt-1.5 text-xs text-[var(--muted)]">{requestRecord.description}</p>
           </div>
         </DetailSectionCard>
 
@@ -281,13 +326,19 @@ export function RequestDetailsPage() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setPreviewFile({ title: doc.document_type, fileName: doc.filename, fileUrl: doc.download_url ?? doc.document })}
+                      onClick={() =>
+                        setPreviewFile({
+                          title: doc.document_type,
+                          fileName: doc.filename,
+                          fileUrl: getRequestDocumentPreviewUrl(doc)
+                        })
+                      }
                       className="rounded-sm bg-[var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
                     >
                       Preview
                     </button>
                     <a
-                      href={doc.download_url ?? doc.document}
+                      href={getRequestDocumentDownloadUrl(doc)}
                       target="_blank"
                       rel="noreferrer"
                       className="primary-button inline-flex items-center gap-2 rounded-sm px-3 py-1.5 text-xs font-semibold"
@@ -299,15 +350,15 @@ export function RequestDetailsPage() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-500">No request documents uploaded yet.</p>
+              <p className="text-sm text-[var(--muted)]">No request documents uploaded yet.</p>
             )}
           </div>
         </DetailSectionCard>
 
-        <DetailSectionCard title="Record Timeline" subtitle="Comments, approvals, status changes, and workflow notes.">
+        <DetailSectionCard title="Timeline" subtitle="Comments and status changes.">
           <RecordChatter
             title="Record History"
-            subtitle="Permanent comments and workflow events for this request."
+            subtitle="Permanent comments and workflow events."
             entries={requestRecord.timeline_entries ?? []}
             emptyMessage="No request history is available yet."
             canAddComment={canComposeTimeline}
@@ -318,46 +369,74 @@ export function RequestDetailsPage() {
         </DetailSectionCard>
       </div>
 
-      <div className="col-span-12 space-y-8 lg:col-span-4">
-        <section className="rounded-xl bg-[var(--sidebar)] p-8 text-white shadow-[var(--shadow-ambient)]">
-          <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--sidebar-muted)]">Reviewer Actions</h3>
+      <div className="col-span-12 space-y-4 lg:col-span-4">
+        <section className="rounded-xl border border-[#41506a] bg-[#0d1828] p-4 text-white shadow-[0_14px_40px_rgba(7,18,34,0.30)]">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#1b2a43] text-[#5e98ff]">
+              <UserCheck className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="headline-font text-base font-extrabold tracking-[-0.04em] text-white">Reviewer Actions</h3>
+            </div>
+          </div>
+          <div className="my-3 h-px bg-[#29374e]" />
           {canDecide || showStartReview ? (
-            <div className="mt-6 space-y-4">
+            <div className="space-y-3">
               {showStartReview ? (
                 <button
                   type="button"
                   disabled={isActionSubmitting}
                   onClick={(event) => openActionPrompt("start-review", event.currentTarget)}
-                  className="w-full rounded-sm border border-white/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/5 disabled:opacity-60"
+                  className="w-full rounded-sm border border-[#3a4455] bg-[#1d2636] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#263247] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isActionSubmitting && pendingAction === "start-review" ? "Processing..." : "Move To Under Review"}
                 </button>
               ) : null}
-              <input
-                value={approvedAmount}
-                onChange={(event) => setApprovedAmount(event.target.value)}
-                className="w-full rounded-sm border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-[var(--sidebar-muted)]"
-                placeholder="Approved amount"
-                type="number"
-                min="0"
-                step="0.01"
-              />
-              <textarea
-                rows={5}
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                className="w-full rounded-sm border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-[var(--sidebar-muted)]"
-                placeholder="Decision comments"
-              />
-              {showApprove || showReject ? (
-                <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block space-y-1.5">
+                <span className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#b6bed6]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#5e98ff]" />
+                  <span>Approved amount</span>
+                </span>
+                <div className="flex items-center rounded-lg border border-[#4177e8] bg-[#101d30] p-1.5 shadow-[0_0_0_1px_rgba(65,119,232,0.12),0_8px_20px_rgba(15,54,126,0.14)]">
+                  <span className="grid h-9 w-12 shrink-0 place-items-center rounded-md bg-[#243149] text-sm font-extrabold text-white">
+                    TZS
+                  </span>
+                  <input
+                    value={approvedAmount}
+                    onChange={(event) => setApprovedAmount(event.target.value)}
+                    className="min-w-0 flex-1 bg-transparent px-2.5 py-1 text-lg font-extrabold tracking-[-0.04em] text-white outline-none placeholder:text-[#8aa4d6] focus:ring-0"
+                    placeholder="0.00"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    aria-label="Approved amount"
+                  />
+                </div>
+              </label>
+              <label className="block space-y-1.5">
+                <span className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#b6bed6]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#5e98ff]" />
+                  <span>Decision comments</span>
+                </span>
+                <textarea
+                  rows={3}
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  className="w-full rounded-lg border border-[#34435a] bg-[#101d30] px-3 py-2 text-sm text-white outline-none placeholder:text-[#9aa7c7] focus:border-[#5e98ff] focus:ring-0"
+                  placeholder="Optional comments for the record"
+                  aria-label="Decision comments"
+                />
+              </label>
+              {showApprove || showReject || showRequestClarification ? (
+                <div className="grid gap-2 sm:grid-cols-2">
                   {showApprove ? (
                     <button
                       type="button"
                       disabled={isActionSubmitting}
                       onClick={(event) => openActionPrompt("approve", event.currentTarget)}
-                      className="primary-button rounded-sm px-4 py-3 text-sm font-semibold disabled:opacity-60"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#5e98ff] bg-gradient-to-br from-[#255bd5] to-[#193b96] px-3 py-2.5 text-xs font-extrabold text-white shadow-[0_8px_20px_rgba(37,91,213,0.22)] transition hover:translate-y-[-1px] hover:from-[#2f68eb] hover:to-[#2245a7] disabled:cursor-not-allowed disabled:opacity-50"
                     >
+                      <CheckCircle2 className="h-4 w-4 text-[#9cc5ff]" />
                       {isActionSubmitting && pendingAction === "approve" ? "Processing..." : "Approve Request"}
                     </button>
                   ) : null}
@@ -366,42 +445,120 @@ export function RequestDetailsPage() {
                       type="button"
                       disabled={isActionSubmitting}
                       onClick={(event) => openActionPrompt("reject", event.currentTarget)}
-                      className="rounded-sm px-4 py-3 text-sm font-semibold text-[#fe8983] transition hover:bg-[#fe8983]/10 disabled:opacity-60"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#ff5454] bg-[#141d2b] px-3 py-2.5 text-xs font-extrabold text-[#ff5a5a] transition hover:translate-y-[-1px] hover:bg-[#ff5454]/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
+                      <XCircle className="h-4 w-4" />
                       {isActionSubmitting && pendingAction === "reject" ? "Processing..." : "Reject Request"}
+                    </button>
+                  ) : null}
+                  {showRequestClarification ? (
+                    <button
+                      type="button"
+                      disabled={isActionSubmitting}
+                      onClick={(event) => openActionPrompt("request-clarification", event.currentTarget)}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#b58a13] bg-[#141d2b] px-3 py-2.5 text-xs font-extrabold text-[#ffdc5c] transition hover:translate-y-[-1px] hover:bg-[#ffdc5c]/10 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+                    >
+                      <CircleHelp className="h-4 w-4" />
+                      {isActionSubmitting && pendingAction === "request-clarification" ? "Processing..." : "Return for Clarification"}
                     </button>
                   ) : null}
                 </div>
               ) : (
-                <p className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                <p className="rounded-lg border border-white/10 bg-white/5 px-4 py-4 text-sm text-[var(--sidebar-text)]/70">
                   Decision actions are not available in the current status.
                 </p>
               )}
             </div>
           ) : (
-            <p className="mt-6 rounded-sm bg-white/5 px-4 py-4 text-sm text-[var(--sidebar-text)]">
+            <p className="mt-6 rounded-sm bg-white/5 px-4 py-4 text-sm text-[var(--sidebar-text)]/70">
               Only the Director can approve or reject requests.
             </p>
           )}
         </section>
 
+        {showFinancePanel ? (
+          <section className="surface-panel rounded-xl p-4">
+            <h3 className="text-sm font-bold text-[var(--ink)]">Finance Actions</h3>
+            <div className="mt-3 border-t border-[var(--line)] pt-3">
+              <div className="space-y-2.5">
+              <label className="block space-y-1 text-xs">
+                <span className="font-semibold text-[var(--muted)]">Finance notes</span>
+                <textarea
+                  rows={2}
+                  value={financeNotes}
+                  onChange={(event) => setFinanceNotes(event.target.value)}
+                  className="institutional-input w-full rounded-md px-3 py-2 text-sm outline-none"
+                  placeholder="Optional notes for the finance record"
+                />
+              </label>
+              {showFinancePendingPayment ? (
+                <label className="block space-y-1 text-xs">
+                  <span className="font-semibold text-[var(--muted)]">Confirmed payment amount</span>
+                  <input
+                    value={approvedAmount}
+                    onChange={(event) => setApprovedAmount(event.target.value)}
+                    className="institutional-input w-full rounded-md px-3 py-2 text-sm outline-none"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Confirmed approved amount"
+                  />
+                </label>
+              ) : null}
+              <div className="grid gap-2 sm:grid-cols-2">
+                {showFinanceStartProcessing ? (
+                  <button
+                    type="button"
+                    disabled={isActionSubmitting}
+                    onClick={(event) => openActionPrompt("finance-start-processing", event.currentTarget)}
+                    className="primary-button rounded-sm px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isActionSubmitting && pendingAction === "finance-start-processing" ? "Processing..." : "Start Processing"}
+                  </button>
+                ) : null}
+                {showFinanceRaiseQuery ? (
+                  <button
+                    type="button"
+                    disabled={isActionSubmitting}
+                    onClick={(event) => openActionPrompt("finance-raise-query", event.currentTarget)}
+                    className="secondary-button rounded-sm px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isActionSubmitting && pendingAction === "finance-raise-query" ? "Processing..." : "Raise Query"}
+                  </button>
+                ) : null}
+                {showFinancePendingPayment ? (
+                  <button
+                    type="button"
+                    disabled={isActionSubmitting}
+                    onClick={(event) => openActionPrompt("finance-pending-payment", event.currentTarget)}
+                    className="primary-button rounded-sm px-3 py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+                  >
+                    {isActionSubmitting && pendingAction === "finance-pending-payment" ? "Processing..." : "Schedule Payment"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            </div>
+          </section>
+        ) : null}
+
         {showCancel || showRestore || showReverse ? (
           <DetailSectionCard title="Request Controls">
-            <div className="space-y-3">
+            <div className="space-y-2">
               <textarea
-                rows={3}
+                rows={2}
                 value={adminComment}
                 onChange={(event) => setAdminComment(event.target.value)}
-                className="institutional-input w-full rounded-md px-4 py-3 text-sm outline-none"
+                className="institutional-input w-full rounded-md px-3 py-2 text-sm outline-none"
                 placeholder="Optional comment for the audit trail"
               />
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="flex flex-wrap gap-2">
                 {showCancel ? (
                   <button
                     type="button"
                     disabled={isActionSubmitting}
                     onClick={(event) => openActionPrompt("cancel", event.currentTarget)}
-                    className="rounded-sm bg-[#9f403d] px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                    className="danger-button rounded-sm px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -411,7 +568,7 @@ export function RequestDetailsPage() {
                     type="button"
                     disabled={isActionSubmitting}
                     onClick={(event) => openActionPrompt("restore", event.currentTarget)}
-                    className="rounded-sm bg-[var(--surface-low)] px-4 py-3 text-sm font-semibold text-[var(--ink)] disabled:opacity-60"
+                    className="secondary-button rounded-sm px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Restore
                   </button>
@@ -421,7 +578,7 @@ export function RequestDetailsPage() {
                     type="button"
                     disabled={isActionSubmitting}
                     onClick={(event) => openActionPrompt("reverse", event.currentTarget)}
-                    className="primary-button rounded-sm px-4 py-3 text-sm font-semibold disabled:opacity-60"
+                    className="primary-button rounded-sm px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Revert Decision
                   </button>
@@ -432,7 +589,7 @@ export function RequestDetailsPage() {
         ) : null}
 
         <DetailSectionCard title="Payment Tracking">
-          <div className="grid gap-4">
+          <div className="grid gap-2">
             <Field label="Amount Approved" value={formatCurrency(requestRecord.approved_amount)} />
             <Field label="Amount Disbursed" value={formatCurrency(requestRecord.disbursed_amount)} />
             <Field label="Payment Date" value={formatDate(requestRecord.payment_date)} />
@@ -440,21 +597,21 @@ export function RequestDetailsPage() {
             <Field label="Reviewed At" value={formatDateTime(requestRecord.reviewed_at)} />
             {canRecordPayment ? (
               <>
-                <label className="grid gap-2 text-sm">
-                  <span>Payment method</span>
-                  <input value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="institutional-input rounded-md px-4 py-3 outline-none" />
+                <label className="grid gap-1 text-xs">
+                  <span className="font-medium text-[var(--muted)]">Payment method</span>
+                  <input value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="institutional-input rounded-md px-3 py-2 text-sm outline-none" />
                 </label>
-                <label className="grid gap-2 text-sm">
-                  <span>Payment reference</span>
-                  <input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} className="institutional-input rounded-md px-4 py-3 outline-none" />
+                <label className="grid gap-1 text-xs">
+                  <span className="font-medium text-[var(--muted)]">Payment reference</span>
+                  <input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} className="institutional-input rounded-md px-3 py-2 text-sm outline-none" />
                 </label>
-                <label className="grid gap-2 text-sm">
-                  <span>{showAddPayment ? "Additional payment amount" : "Disbursed amount"}</span>
+                <label className="grid gap-1 text-xs">
+                  <span className="font-medium text-[var(--muted)]">{showAddPayment ? "Additional payment amount" : "Disbursed amount"}</span>
                   {showRecordPayment ? (
                     <input
                       value={recordPaymentAmount}
                       onChange={(event) => setRecordPaymentAmount(event.target.value)}
-                      className="institutional-input rounded-md px-4 py-3 text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
+                      className="institutional-input rounded-md px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
                       type="number"
                       min="0"
                       step="0.01"
@@ -465,7 +622,7 @@ export function RequestDetailsPage() {
                     <input
                       value={additionalPaymentAmount}
                       onChange={(event) => setAdditionalPaymentAmount(event.target.value)}
-                      className="institutional-input rounded-md px-4 py-3 text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
+                      className="institutional-input rounded-md px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
                       type="number"
                       min="0"
                       step="0.01"
@@ -476,7 +633,7 @@ export function RequestDetailsPage() {
                     <input
                       value={completionAmount}
                       onChange={(event) => setCompletionAmount(event.target.value)}
-                      className="institutional-input rounded-md px-4 py-3 text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
+                      className="institutional-input rounded-md px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
                       type="number"
                       min="0"
                       step="0.01"
@@ -490,7 +647,7 @@ export function RequestDetailsPage() {
                       type="button"
                       onClick={(event) => openActionPrompt("record-payment", event.currentTarget)}
                       disabled={isActionSubmitting}
-                      className="primary-button rounded-sm px-4 py-3 text-sm font-semibold disabled:opacity-60"
+                      className="primary-button rounded-sm px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isActionSubmitting && pendingAction === "record-payment" ? "Processing..." : "Record Payment"}
                     </button>
@@ -500,7 +657,7 @@ export function RequestDetailsPage() {
                       type="button"
                       onClick={(event) => openActionPrompt("add-payment", event.currentTarget)}
                       disabled={isActionSubmitting || !additionalPaymentAmount.trim()}
-                      className="primary-button rounded-sm px-4 py-3 text-sm font-semibold disabled:opacity-60"
+                      className="primary-button rounded-sm px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isActionSubmitting && pendingAction === "add-payment" ? "Processing..." : "Add Payment"}
                     </button>
@@ -510,7 +667,7 @@ export function RequestDetailsPage() {
                       type="button"
                       onClick={(event) => openActionPrompt("mark-completed", event.currentTarget)}
                       disabled={isActionSubmitting}
-                      className="rounded-sm bg-[var(--surface-low)] px-4 py-3 text-sm font-semibold text-[var(--ink)] disabled:opacity-60"
+                      className="secondary-button rounded-sm px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isActionSubmitting && pendingAction === "mark-completed" ? "Processing..." : "Mark Completed"}
                     </button>
@@ -525,8 +682,8 @@ export function RequestDetailsPage() {
             ) : null}
             <div>
               <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="text-slate-500 dark:text-slate-400">Remaining Balance</span>
-                <span className="font-semibold text-slate-900 dark:text-white">{formatCurrency(remainingBalance)}</span>
+                <span className="text-[var(--muted)]">Remaining Balance</span>
+                <span className="font-semibold text-[var(--ink)]">{formatCurrency(remainingBalance)}</span>
               </div>
               <div className="h-3 rounded-full bg-[var(--surface-container)]">
                 <div
@@ -543,24 +700,38 @@ export function RequestDetailsPage() {
 
         <DetailSectionCard title="Add Document">
           {canUploadDocuments && canUploadForStatus ? (
-            <div className="space-y-3">
-              <input
-                value={uploadType}
-                onChange={(event) => setUploadType(event.target.value)}
-                className="institutional-input w-full rounded-md px-4 py-3 outline-none"
-              />
-              <input
-                onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
-                type="file"
-                className="w-full rounded-md border border-dashed border-[var(--line)] bg-[var(--surface-low)] px-4 py-4 outline-none"
-              />
+            <div className="space-y-2.5">
+              <label className="block space-y-1 text-xs">
+                <span className="font-medium text-[var(--muted)]">Document type</span>
+                <input
+                  value={uploadType}
+                  onChange={(event) => setUploadType(event.target.value)}
+                  className="institutional-input w-full rounded-md px-3 py-2 text-sm outline-none"
+                  placeholder="e.g. Supporting Document"
+                  disabled={isUploadSubmitting}
+                  aria-label="Document type"
+                />
+              </label>
+              <label className="block space-y-1 text-xs">
+                <span className="font-medium text-[var(--muted)]">File</span>
+                <input
+                  onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+                  type="file"
+                  disabled={isUploadSubmitting}
+                  className="w-full cursor-pointer rounded-md border border-dashed border-[var(--line)] bg-[var(--surface-low)] px-4 py-4 text-sm text-[var(--muted)] outline-none transition file:mr-3 file:rounded file:border-0 file:bg-[var(--surface-container)] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-[var(--ink)] hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Select file to upload"
+                />
+              </label>
+              {uploadFile ? (
+                <p className="text-xs text-[var(--muted)]">
+                  Selected: <span className="font-semibold text-[var(--ink)]">{uploadFile.name}</span>
+                </p>
+              ) : null}
               <button
                 type="button"
                 disabled={isUploadSubmitting || !uploadFile}
                 onClick={() => {
-                  if (!uploadFile) {
-                    return;
-                  }
+                  if (!uploadFile) return;
                   setIsUploadSubmitting(true);
                   void uploadRequestDocument(requestRecord.id, uploadFile, uploadType)
                     .then(() => loadRequest())
@@ -571,9 +742,14 @@ export function RequestDetailsPage() {
                     .catch((reason) => toast.error(reason instanceof Error ? reason.message : "Upload failed"))
                     .finally(() => setIsUploadSubmitting(false));
                 }}
-                className="rounded-sm bg-[var(--surface-low)] px-4 py-3 text-sm font-semibold text-[var(--ink)]"
+                className="secondary-button w-full rounded-sm px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isUploadSubmitting ? "Uploading..." : "Upload document"}
+                {isUploadSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="spin inline-block h-3.5 w-3.5 rounded-full border-2 border-[var(--muted)] border-t-[var(--ink)]" />
+                    Uploading…
+                  </span>
+                ) : "Upload document"}
               </button>
             </div>
           ) : (
@@ -618,9 +794,9 @@ export function RequestDetailsPage() {
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="bg-[var(--surface-low)] p-3">
-      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
-      <div className="mt-2 text-sm font-semibold text-[var(--ink)]">{value}</div>
+    <div className="rounded-md bg-[var(--surface-low)] px-2.5 py-2">
+      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
+      <div className="mt-1 text-xs font-semibold text-[var(--ink)]">{value}</div>
     </div>
   );
 }

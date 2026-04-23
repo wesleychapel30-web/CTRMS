@@ -116,6 +116,7 @@ INSTALLED_APPS = [
     'requests.apps.RequestsConfig',
     'invitations.apps.InvitationsConfig',
     'common.apps.CommonConfig',
+    'enterprise.apps.EnterpriseConfig',
 ]
 
 MIDDLEWARE = [

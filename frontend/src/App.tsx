@@ -5,14 +5,19 @@ import { StatePanel } from "./components/FeedbackStates";
 import { useSession } from "./context/SessionContext";
 import { ActivityPage } from "./pages/ActivityPage";
 import { AdminPage } from "./pages/AdminPage";
+import { ApprovalInboxPage } from "./pages/ApprovalInboxPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { CreateRequestPage } from "./pages/CreateRequestPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
+import { FinancePage } from "./pages/FinancePage";
 import { InvitationDetailsPage } from "./pages/InvitationDetailsPage";
 import { InvitationsPage } from "./pages/InvitationsPage";
+import { InventoryPage } from "./pages/InventoryPage";
 import { LoginPage } from "./pages/LoginPage";
+import { OrganizationPage } from "./pages/OrganizationPage";
 import { PaymentsPage } from "./pages/PaymentsPage";
+import { ProcurementPage } from "./pages/ProcurementPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { RequestDetailsPage } from "./pages/RequestDetailsPage";
 import { RequestsPage } from "./pages/RequestsPage";
@@ -21,6 +26,11 @@ import type { ThemeMode } from "./types";
 
 const ROUTE_PERMISSIONS = {
   dashboard: ["dashboard:view"],
+  organization: ["user:manage", "rbac:manage", "settings:update"],
+  approvals: ["procurement:approve", "payment_request:approve", "invoice:approve"],
+  procurement: ["procurement:view_all", "procurement:create", "purchase_order:view_all"],
+  inventory: ["inventory:view", "goods_receipt:view", "goods_receipt:record"],
+  finance: ["finance:view", "payment:view", "payment:record"],
   requests: ["request:view_all", "request:view_own", "payment:view", "payment:record"],
   createRequest: ["request:create"],
   requestDetails: ["request:view_all", "request:view_own", "payment:view", "payment:record"],
@@ -51,8 +61,28 @@ function getPageMeta(pathname: string) {
 
   const pageMeta: Record<string, { title: string; subtitle: string }> = {
     "/": {
-      title: "Director Dashboard",
-      subtitle: "Requests, invitations, and approvals at a glance."
+      title: "Dashboard",
+      subtitle: "Overview of requests, procurement, finance, and inventory."
+    },
+    "/organization": {
+      title: "Organization",
+      subtitle: "Organizations, departments, branches, and workflows."
+    },
+    "/approvals": {
+      title: "Approval Inbox",
+      subtitle: "Pending procurement and finance decisions."
+    },
+    "/procurement": {
+      title: "Procurement",
+      subtitle: "Requests, purchase orders, and delivery."
+    },
+    "/inventory": {
+      title: "Inventory",
+      subtitle: "Receiving, stock, and ledger records."
+    },
+    "/finance": {
+      title: "Finance",
+      subtitle: "Invoices, payment requests, and payments."
     },
     "/requests": {
       title: "Requests",
@@ -72,7 +102,7 @@ function getPageMeta(pathname: string) {
     },
     "/reports": {
       title: "Reports",
-      subtitle: "Operational and financial reporting."
+      subtitle: "Reporting and exports."
     },
     "/admin": {
       title: "Administration Panel",
@@ -92,7 +122,7 @@ function getPageMeta(pathname: string) {
     },
     "/settings": {
       title: "System Settings",
-      subtitle: "Configuration and communication settings."
+      subtitle: "Branding, email, notifications, and access."
     }
   };
 
@@ -115,7 +145,7 @@ function App() {
           <StatePanel
             variant="loading"
             title="Loading session"
-            message="Restoring permissions, profile settings, and access state."
+            message="Restoring your session."
           />
         </div>
       </div>
@@ -131,10 +161,15 @@ function App() {
 
   const permissionSet = new Set(user.permissions ?? []);
   const roleSet = new Set([...(user.roles ?? []), user.role].filter(Boolean));
-  const canAccessAuditByRole = roleSet.has("admin") || roleSet.has("director");
+  const canAccessAuditByRole = roleSet.has("admin") || roleSet.has("director") || roleSet.has("super_admin");
   const canAccess = (requiredPermissions: readonly string[]) => requiredPermissions.some((key) => permissionSet.has(key));
 
   const canViewDashboard = canAccess(ROUTE_PERMISSIONS.dashboard);
+  const canViewOrganization = canAccess(ROUTE_PERMISSIONS.organization);
+  const canViewApprovals = canAccess(ROUTE_PERMISSIONS.approvals);
+  const canViewProcurement = canAccess(ROUTE_PERMISSIONS.procurement);
+  const canViewInventory = canAccess(ROUTE_PERMISSIONS.inventory);
+  const canViewFinance = canAccess(ROUTE_PERMISSIONS.finance);
   const canViewRequests = canAccess(ROUTE_PERMISSIONS.requests);
   const canCreateRequest = canAccess(ROUTE_PERMISSIONS.createRequest);
   const canViewRequestDetails = canAccess(ROUTE_PERMISSIONS.requestDetails);
@@ -150,6 +185,11 @@ function App() {
 
   const fallbackRoute =
     (canViewDashboard && "/") ||
+    (canViewOrganization && "/organization") ||
+    (canViewApprovals && "/approvals") ||
+    (canViewProcurement && "/procurement") ||
+    (canViewInventory && "/inventory") ||
+    (canViewFinance && "/finance") ||
     (canViewRequests && "/requests") ||
     (canViewInvitations && "/invitations") ||
     (canViewCalendar && "/calendar") ||
@@ -177,6 +217,11 @@ function App() {
       >
         <Routes>
           <Route path="/" element={guard(canViewDashboard, <DashboardPage />)} />
+          <Route path="/organization" element={guard(canViewOrganization, <OrganizationPage />)} />
+          <Route path="/approvals" element={guard(canViewApprovals, <ApprovalInboxPage />)} />
+          <Route path="/procurement" element={guard(canViewProcurement, <ProcurementPage />)} />
+          <Route path="/inventory" element={guard(canViewInventory, <InventoryPage />)} />
+          <Route path="/finance" element={guard(canViewFinance, <FinancePage />)} />
           <Route path="/requests" element={guard(canViewRequests, <RequestsPage />)} />
           <Route path="/requests/new" element={guard(canCreateRequest, <CreateRequestPage />)} />
           <Route path="/requests/:requestId" element={guard(canViewRequestDetails, <RequestDetailsPage />)} />

@@ -1,162 +1,172 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BarChart, DonutChart, LineChart, Timeline } from "../components/Charts";
 import { StatePanel } from "../components/FeedbackStates";
 import { SectionCard } from "../components/SectionCard";
 import { StatCard } from "../components/StatCard";
-import { fetchDashboardOverview, fetchPublicBranding } from "../lib/api";
+import { fetchEnterpriseOverview, fetchPublicBranding } from "../lib/api";
 import { formatCurrency } from "../lib/format";
-import type { BrandingSettings, ChartDatum, DashboardOverview, Stat } from "../types";
+import type { BrandingSettings, ChartDatum, EnterpriseOverview, Stat } from "../types";
 
-const categoryColors = ["#545f73", "#6f7e95", "#8fa1bd", "#b4c3db", "#605c78"];
+const chartColors = [
+  "var(--accent)",
+  "var(--accent-dim)",
+  "var(--surface-highest)",
+  "var(--surface-high)",
+];
 
 export function DashboardPage() {
-  const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [overview, setOverview] = useState<EnterpriseOverview | null>(null);
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     setIsLoading(true);
-    Promise.all([fetchDashboardOverview(), fetchPublicBranding()])
-      .then(([data, brandingPayload]) => {
-        const categoryBreakdown = data.charts.category_breakdown.map((item, index) => ({
-          ...item,
-          color: categoryColors[index % categoryColors.length]
-        }));
-        setOverview({ ...data, charts: { ...data.charts, category_breakdown: categoryBreakdown } });
+    Promise.all([fetchEnterpriseOverview(), fetchPublicBranding()])
+      .then(([enterprisePayload, brandingPayload]) => {
+        setOverview(enterprisePayload);
         setBranding(brandingPayload.branding);
         setError(null);
       })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to load dashboard"))
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to load the dashboard"))
       .finally(() => setIsLoading(false));
   }, []);
+
+  const currencyCode = overview?.organization?.currency_code ?? "TZS";
+  const moduleMixData = useMemo(() => {
+    const items = overview?.charts.module_mix ?? [];
+    const total = items.reduce((sum, item) => sum + item.value, 0) || 1;
+    return items.map((item, index) => ({
+      ...item,
+      value: Math.round((item.value / total) * 100),
+      color: chartColors[index % chartColors.length]
+    }));
+  }, [overview]);
 
   if (error) {
     return <StatePanel variant="error" title="Dashboard unavailable" message={error} />;
   }
 
   if (isLoading || !overview) {
-    return <StatePanel variant="loading" title="Loading dashboard" message="Preparing request, approval, and finance summaries." />;
+    return <StatePanel variant="loading" title="Loading dashboard" message="Loading summary data." />;
   }
 
   const stats: Stat[] = [
-    { label: "Total Requests", value: String(overview.stats.total_requests), change: `${overview.stats.approval_rate}% approval rate`, tone: "accent" },
-    { label: "Pending Requests", value: String(overview.stats.pending_requests), change: `${overview.stats.under_review} under review`, tone: "warning" },
-    { label: "Approved Requests", value: String(overview.stats.approved_requests), change: `${overview.stats.paid_requests} paid / completed`, tone: "success" },
-    { label: "Rejected Requests", value: String(overview.stats.rejected_requests), change: "Closed decisions", tone: "danger" }
+    {
+      label: "Open Requests",
+      value: String(overview.summary.open_purchase_requests),
+      change: `${overview.summary.active_workflows} active workflow templates`,
+      tone: "accent"
+    },
+    {
+      label: "Orders In Flight",
+      value: String(overview.summary.issued_purchase_orders),
+      change: `${overview.summary.pending_payments} payment queue items`,
+      tone: "warning"
+    },
+    {
+      label: "Committed Budget",
+      value: formatCurrency(overview.summary.committed_budget, currencyCode),
+      change: `${overview.summary.departments} shared departments`,
+      tone: "success"
+    },
+    {
+      label: "Spent Budget",
+      value: formatCurrency(overview.summary.spent_budget, currencyCode),
+      change: `${Math.round(overview.summary.inventory_units)} inventory units on hand`,
+      tone: "danger"
+    }
   ];
 
-  const approvalRateData: ChartDatum[] = overview.charts.approval_rate.map((item) => ({ ...item, value: Number(item.value) }));
+  const spendTrend: ChartDatum[] = overview.charts.spend_trend.map((item) => ({ ...item, value: Number(item.value) }));
+  const procurementPipeline: ChartDatum[] = overview.charts.procurement_pipeline.map((item) => ({ ...item, value: Number(item.value) }));
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 lg:col-span-8 surface-panel interactive-lift overflow-hidden rounded-xl">
-          <div className="flex items-center justify-between bg-[var(--surface-card)] px-6 py-5">
-            <div>
-              <h3 className="headline-font text-lg font-bold tracking-[-0.03em] text-[var(--ink)]">Financial Summary</h3>
-              <p className="mt-1 text-sm font-medium text-[var(--muted)]">Current funding, approvals, and disbursement position.</p>
-            </div>
-            <span className="rounded-sm bg-[var(--surface-low)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-              Institution
-            </span>
-          </div>
-          <div className="grid gap-px bg-[var(--surface-container)] md:grid-cols-3">
-            <div className="bg-[var(--surface-card)] px-8 py-7">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Amount Requested</p>
-              <p className="headline-font mt-4 text-4xl font-extrabold tracking-[-0.05em] text-[var(--ink)]">
-                {formatCurrency(overview.stats.total_requested)}
-              </p>
-              <p className="mt-2 text-xs font-semibold text-[var(--muted)]">All recorded request submissions</p>
-            </div>
-            <div className="bg-[var(--surface-card)] px-8 py-7">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Amount Approved</p>
-              <p className="headline-font mt-4 text-4xl font-extrabold tracking-[-0.05em] text-[var(--ink)]">
-                {formatCurrency(overview.stats.total_approved)}
-              </p>
-              <p className="mt-2 text-xs font-semibold text-[var(--success)]">Approved for release</p>
-            </div>
-            <div className="bg-[var(--surface-card)] px-8 py-7">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Amount Disbursed</p>
-              <p className="headline-font mt-4 text-4xl font-extrabold tracking-[-0.05em] text-[var(--ink)]">
-                {formatCurrency(overview.stats.total_disbursed)}
-              </p>
-              <p className="mt-2 text-xs font-semibold text-[var(--accent)]">Processed payments</p>
+    <div className="space-y-4">
+      <section className="slate-rail overflow-hidden rounded-xl p-4 text-white shadow-[var(--shadow-ambient)]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(34rem,1.6fr)] xl:items-center">
+          <div className="min-w-0">
+            <h2 className="headline-font truncate text-xl font-extrabold tracking-[-0.06em] sm:text-2xl">
+              {overview.organization?.name || branding?.organization_name || "Dashboard"}
+            </h2>
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/75">
+              <span className="rounded-full bg-white/10 px-2.5 py-1">{overview.organization?.currency_code || "TZS"} currency</span>
+              <span className="rounded-full bg-white/10 px-2.5 py-1">{overview.organization?.timezone || "Africa/Nairobi"} timezone</span>
+              <span className="rounded-full bg-white/10 px-2.5 py-1">{overview.summary.organizations} organization(s)</span>
             </div>
           </div>
-        </div>
 
-        <div className="col-span-12 grid gap-6 lg:col-span-4">
-          <div className="interactive-lift rounded-xl bg-[linear-gradient(135deg,var(--accent)_0%,var(--accent-dim)_100%)] p-6 text-white shadow-[var(--shadow-ambient)]">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/75">Total Requests</p>
-            <div className="mt-6 flex items-end justify-between gap-4">
-              <span className="headline-font text-5xl font-extrabold tracking-[-0.06em]">{overview.stats.total_requests}</span>
-              <span className="rounded-sm bg-white/14 px-2.5 py-1 text-xs font-bold">
-                {overview.stats.pending_requests} pending
-              </span>
-            </div>
-          </div>
-          <div className="surface-panel interactive-lift rounded-xl p-6">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Pending Approvals</p>
-            <div className="mt-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="headline-font text-4xl font-extrabold tracking-[-0.05em] text-[var(--ink)]">{overview.stats.under_review}</p>
-                <p className="mt-2 text-sm font-medium text-[var(--muted)]">Requests currently awaiting director action.</p>
+          <div className="rounded-lg bg-white/10 px-3 py-2.5 backdrop-blur">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="border-white/10 sm:border-r sm:pr-3">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/55">Payments</p>
+                <p className="headline-font mt-0.5 text-xl font-extrabold tracking-[-0.05em]">{overview.summary.pending_payments}</p>
+                <p className="text-[9px] font-medium text-white/45">Awaiting settlement</p>
               </div>
-              <div className="grid h-11 w-11 place-items-center rounded-full bg-[#fe8983]/20 text-[var(--danger)]">!</div>
+              <div className="border-white/10 sm:border-r sm:pr-3">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/55">Invoices</p>
+                <p className="headline-font mt-0.5 text-xl font-extrabold tracking-[-0.05em]">{overview.summary.draft_invoices}</p>
+                <p className="text-[9px] font-medium text-white/45">In review</p>
+              </div>
+              <div className="border-white/10 sm:border-r sm:pr-3">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/55">Attention</p>
+                <p className="headline-font mt-0.5 text-xl font-extrabold tracking-[-0.05em]">{overview.alerts.length}</p>
+                <p className="text-[9px] font-medium text-white/45">Items flagged</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/55">Approvals</p>
+                <p className="headline-font mt-0.5 text-xl font-extrabold tracking-[-0.05em]">{overview.summary.my_pending_approvals}</p>
+                <p className="text-[9px] font-medium text-white/45">My queue</p>
+              </div>
             </div>
           </div>
         </div>
+      </section>
 
-        <div className="col-span-12 lg:col-span-9">
-          <SectionCard title="Request Trends" subtitle="Activity volume over the recent reporting window.">
-            <LineChart data={overview.charts.monthly_trend} />
-          </SectionCard>
-        </div>
-
-        <div className="col-span-12 lg:col-span-3">
-          <SectionCard title="Recent Activity" subtitle="Upcoming events and request milestones.">
-            <Timeline items={overview.timeline} />
-          </SectionCard>
-        </div>
-
-        <div className="col-span-12 md:col-span-6 xl:col-span-3">
-          <SectionCard title="Requests by Category">
-            <DonutChart data={overview.charts.category_breakdown} />
-          </SectionCard>
-        </div>
-
-        <div className="col-span-12 md:col-span-6 xl:col-span-5">
-          <SectionCard title="Approval Rate">
-            <BarChart data={approvalRateData} />
-          </SectionCard>
-        </div>
-
-        <div className="col-span-12 xl:col-span-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
-            {stats.map((stat) => (
-              <StatCard key={stat.label} {...stat} />
-            ))}
-            {branding ? (
-              <article className="surface-panel interactive-lift rounded-xl p-5 md:col-span-2">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Institution</p>
-                <div className="mt-4 flex items-center gap-4">
-                  {branding.logo_url ? (
-                    <img src={branding.logo_url} alt={branding.organization_name} className="h-16 w-16 rounded-sm bg-[var(--surface-low)] object-contain p-2" />
-                  ) : null}
-                  <div>
-                    <p className="headline-font text-lg font-bold tracking-[-0.03em] text-[var(--ink)]">
-                      {branding.organization_name || "Institution"}
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-[var(--muted)]">{branding.site_name || "CTRMS"}</p>
-                    <p className="mt-2 text-xs font-semibold text-[var(--muted)]">
-                      {overview.stats.upcoming_invitations} upcoming invitations · {overview.stats.events_next_week} events in 7 days
-                    </p>
-                  </div>
-                </div>
-              </article>
-            ) : null}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat, index) => (
+          <div key={stat.label} className={`item-enter item-enter-${index + 1}`}>
+            <StatCard {...stat} />
           </div>
+        ))}
+      </div>
+
+      {overview.alerts.length ? (
+        <SectionCard title="Alerts">
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            {overview.alerts.map((alert) => (
+              <article key={alert.title} className="rounded-lg border border-[var(--surface-container)] bg-[var(--surface-low)] px-3 py-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--danger)]">{alert.title}</p>
+                <p className="mt-1.5 text-xs font-medium text-[var(--ink)]">{alert.message}</p>
+              </article>
+            ))}
+          </div>
+        </SectionCard>
+      ) : null}
+
+      <div className="grid grid-cols-12 gap-4">
+        <div className="col-span-12 xl:col-span-7">
+          <SectionCard title="Spend Trend" subtitle="Invoice totals over time.">
+            <LineChart data={spendTrend} />
+          </SectionCard>
+        </div>
+
+        <div className="col-span-12 xl:col-span-5">
+          <SectionCard title="Module Mix" subtitle="Activity by module.">
+            <DonutChart data={moduleMixData} centerLabel="Modules" />
+          </SectionCard>
+        </div>
+
+        <div className="col-span-12 xl:col-span-6">
+          <SectionCard title="Procurement Pipeline" subtitle="Request stages.">
+            <BarChart data={procurementPipeline} valueSuffix="" />
+          </SectionCard>
+        </div>
+
+        <div className="col-span-12 xl:col-span-6">
+          <SectionCard title="Recent Activity">
+            <Timeline items={overview.timeline} compact />
+          </SectionCard>
         </div>
       </div>
     </div>

@@ -1,6 +1,5 @@
-import { Bell, LoaderCircle, Menu, MoonStar, Plus, Search, SunMedium } from "lucide-react";
+import { Bell, LoaderCircle, Menu, MoonStar, Search, SunMedium } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
 import { PageHeader } from "./PageHeader";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { InlineBanner } from "./FeedbackStates";
@@ -29,7 +28,6 @@ type TopHeaderProps = {
   searchError: string | null;
   isSearchLoading: boolean;
   onSearchSelect: (href: string) => void;
-  canCreateRequest: boolean;
   notificationsOpen: boolean;
   onToggleNotifications: () => void;
   onCloseNotifications: () => void;
@@ -57,7 +55,6 @@ export function TopHeader({
   searchError,
   isSearchLoading,
   onSearchSelect,
-  canCreateRequest,
   notificationsOpen,
   onToggleNotifications,
   onCloseNotifications,
@@ -105,12 +102,12 @@ export function TopHeader({
   }, [notificationsOpen, onCloseNotifications]);
 
   return (
-    <header className="sticky top-0 z-30 bg-[var(--surface)]/85 px-4 py-4 backdrop-blur-md sm:px-8">
-      <div className="flex items-start justify-between gap-4 border-b border-[var(--line)] pb-4">
-        <div className="flex min-w-0 items-start gap-3">
+    <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--surface)]/90 px-4 py-3 backdrop-blur-md sm:px-6 md:px-8 lg:px-10">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             onClick={onOpenSidebar}
-            className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-sm bg-[var(--surface-card)] text-[var(--ink)] hover:bg-[var(--surface-low)] lg:hidden"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-[var(--surface-card)] text-[var(--ink)] hover:bg-[var(--surface-low)] lg:hidden"
             aria-label="Open navigation"
           >
             <Menu className="h-4 w-4" />
@@ -127,7 +124,7 @@ export function TopHeader({
                   value={searchQuery}
                   onChange={(event) => onSearchChange(event.target.value)}
                   onFocus={onSearchOpen}
-                  placeholder="Search institutional data..."
+                  placeholder="Search records..."
                   className="w-64 bg-transparent outline-none placeholder:text-[var(--muted)]"
                 />
               </label>
@@ -136,7 +133,7 @@ export function TopHeader({
                   <div className="max-h-80 overflow-y-auto p-2">
                     {searchError ? <InlineBanner variant="error" title="Search unavailable" message={searchError} className="m-1" /> : null}
                     {!searchError && !searchQuery.trim() ? (
-                      <p className="px-3 py-3 text-sm text-[var(--muted)]">Start typing to search requests, invitations, and records.</p>
+                      <p className="px-3 py-3 text-sm text-[var(--muted)]">Type to search records.</p>
                     ) : null}
                     {!searchError && isSearchLoading ? (
                       <div className="space-y-2 p-1" aria-busy="true">
@@ -177,16 +174,6 @@ export function TopHeader({
                 </div>
               ) : null}
             </div>
-          ) : null}
-
-          {canCreateRequest ? (
-            <Link
-              to="/requests/new"
-              className="primary-button hidden items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold shadow-sm hover:opacity-95 sm:inline-flex"
-            >
-              <Plus className="h-4 w-4" />
-              Create Request
-            </Link>
           ) : null}
 
           <button

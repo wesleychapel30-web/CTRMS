@@ -1,4 +1,4 @@
-import { CalendarDays, Download, Plus, Printer, TrendingUp } from "lucide-react";
+import { CalendarDays, Download, Plus, Printer, Search, TrendingUp, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { DataTable } from "../components/DataTable";
@@ -7,7 +7,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { useToast } from "../context/ToastContext";
 import { createInvitation, fetchInvitations } from "../lib/api";
 import { formatDateTime } from "../lib/format";
-import type { InvitationRecord } from "../types";
+import type { ApiListResponse, InvitationRecord } from "../types";
 
 const emptyDraft = {
   inviting_organization: "",
@@ -22,8 +22,41 @@ const emptyDraft = {
 
 type Draft = typeof emptyDraft;
 
+const invitationStatusOptions = [
+  { value: "", label: "All statuses" },
+  { value: "pending_review", label: "Pending Review" },
+  { value: "accepted", label: "Accepted" },
+  { value: "declined", label: "Declined" },
+  { value: "confirmed_attendance", label: "Confirmed Attendance" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "archived", label: "Archived" }
+] as const;
+
 function getErrorMessage(reason: unknown) {
   return reason instanceof Error ? reason.message : "Unable to load invitations";
+}
+
+function formatEventDateLabel(value: string) {
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+
+function normalizeInvitationListResponse(payload: ApiListResponse<InvitationRecord> | InvitationRecord[]) {
+  if (Array.isArray(payload)) {
+    return {
+      results: payload,
+      count: payload.length
+    };
+  }
+
+  return {
+    results: Array.isArray(payload.results) ? payload.results : [],
+    count: typeof payload.count === "number" ? payload.count : 0
+  };
 }
 
 function downloadInvitationsCsv(rows: InvitationRecord[]) {
@@ -82,7 +115,9 @@ export function InvitationsPage() {
       params.set("ordering", ordering);
       if (search) params.set("search", search);
       if (status) params.set("status", status);
-      const response = await fetchInvitations(params);
+      const response = normalizeInvitationListResponse(
+        (await fetchInvitations(params)) as ApiListResponse<InvitationRecord> | InvitationRecord[]
+      );
       setRows(response.results);
       setCount(response.count);
       setError(null);
@@ -97,6 +132,21 @@ export function InvitationsPage() {
     void loadInvitations();
   }, [page, ordering, search, status]);
 
+  useEffect(() => {
+    if (!showComposer) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isCreating) {
+        setShowComposer(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showComposer, isCreating]);
+
   const sort = ordering
     ? {
         key: ordering.startsWith("-") ? ordering.slice(1) : ordering,
@@ -107,6 +157,8 @@ export function InvitationsPage() {
   const pendingCount = rows.filter((item) => item.status === "pending_review").length;
   const confirmedCount = rows.filter((item) => item.status === "confirmed_attendance").length;
   const attendanceRate = rows.length ? Math.round((confirmedCount / rows.length) * 100) : 0;
+  const currentStatusLabel = invitationStatusOptions.find((option) => option.value === status)?.label ?? "All statuses";
+  const scheduledCount = rows.filter((item) => new Date(item.event_date).getTime() >= Date.now()).length;
   const nextMajorEvent = rows
     .slice()
     .sort((left, right) => new Date(left.event_date).getTime() - new Date(right.event_date).getTime())
@@ -144,88 +196,347 @@ export function InvitationsPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="metric-strip rounded-xl px-6 py-7">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="section-kicker">Invitation Registry</p>
-              <h2 className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em] text-[var(--ink)]">
-                Institutional Invitations
+    <>
+      <div className="space-y-4">
+        <section className="grid gap-3 xl:grid-cols-12">
+          <div className="surface-panel self-start rounded-xl px-4 py-3 xl:col-span-7">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="headline-font text-xl font-extrabold tracking-[-0.04em] text-[var(--ink)] sm:text-2xl">
+                Invitations
               </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-                Manage official event participation, review invitation decisions, and track executive attendance across upcoming institutional engagements.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => setShowComposer((current) => !current)}
-                className="secondary-button inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold"
+                onClick={() => setShowComposer(true)}
+                className="primary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
               >
-                <Plus className="h-4 w-4" />
-                {showComposer ? "Close Form" : "Issue Invitation"}
+                <Plus className="h-3.5 w-3.5" />
+                New Invitation
+              </button>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <InvitationMetricCard label="Pending" value={pendingCount} note="Awaiting response" />
+              <InvitationMetricCard label="Confirmed" value={confirmedCount} note="Attendance confirmed" />
+              <InvitationMetricCard
+                label="Attendance %"
+                value={`${attendanceRate}%`}
+                note="Confirmed on current view"
+                accent
+                icon={<TrendingUp className="h-3.5 w-3.5" />}
+              />
+              <InvitationMajorEventCard event={nextMajorEvent} />
+            </div>
+          </div>
+
+          <aside className="hero-card self-start rounded-xl p-4 xl:col-span-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="headline-font text-lg font-bold tracking-[-0.04em] text-[var(--ink)]">
+                  Invitation Overview
+                </h3>
+              </div>
+              <div className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ink)]">
+                {currentStatusLabel}
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-4 xl:grid-cols-2">
+              <OverviewStat label="Registry total" value={`${count}`} helper="Total records" />
+              <OverviewStat label="Current view" value={`${rows.length}`} helper="Rows on page" />
+              <OverviewStat label="Status filter" value={currentStatusLabel} helper="Applied filter" />
+              <OverviewStat label="Scheduled" value={`${scheduledCount}`} helper="Upcoming items" />
+            </div>
+
+            <div className="mt-3 rounded-lg bg-white/8 px-3 py-2.5 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-white/10">
+                  <CalendarDays className="h-4 w-4 text-[var(--ink)]" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Next Major Event</p>
+                  {nextMajorEvent ? (
+                    <>
+                      <p className="mt-1 truncate text-sm font-semibold text-[var(--ink)]">{nextMajorEvent.event_title}</p>
+                      <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
+                        {formatEventDateLabel(nextMajorEvent.event_date)} {" · "} {nextMajorEvent.location}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-xs text-[var(--muted)]">No scheduled event on this view.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section className="surface-panel overflow-hidden rounded-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--surface-low)] px-4 py-3">
+            <h3 className="headline-font text-sm font-bold tracking-[-0.02em] text-[var(--ink)]">Invitation List</h3>
+            <div className="flex flex-1 flex-wrap justify-end gap-2">
+              <label className="relative min-w-[14rem] max-w-md flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--muted)]" />
+                <input
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search invitations"
+                  className="institutional-input w-full rounded-md px-3 py-2 pl-9 text-sm outline-none"
+                />
+              </label>
+              <select
+                value={status}
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setPage(1);
+                }}
+                className="institutional-input rounded-md px-3 py-2 text-sm outline-none"
+              >
+                {invitationStatusOptions.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  downloadInvitationsCsv(rows);
+                  toast.success(`${rows.length} invitation(s) exported.`, "CSV exported");
+                }}
+                className="secondary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="secondary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print
               </button>
             </div>
           </div>
 
-          <div className="mt-8 grid gap-6 md:grid-cols-[repeat(3,minmax(0,1fr))_15rem]">
-            <div className="metric-segment">
-              <p className="section-kicker">Pending</p>
-              <p className="headline-font mt-2 text-4xl font-extrabold tracking-[-0.06em]">{pendingCount}</p>
-              <p className="mt-1 text-xs font-medium text-[var(--muted)]">Current page review queue</p>
-            </div>
-            <div className="metric-segment">
-              <p className="section-kicker">Confirmed</p>
-              <p className="headline-font mt-2 text-4xl font-extrabold tracking-[-0.06em]">{confirmedCount}</p>
-              <p className="mt-1 text-xs font-medium text-[var(--muted)]">Attendance confirmations</p>
-            </div>
-            <div className="metric-segment">
-              <p className="section-kicker">Attendance</p>
-              <p className="headline-font mt-2 text-4xl font-extrabold tracking-[-0.06em] text-[var(--accent)]">{attendanceRate}%</p>
-              <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-[var(--muted)]">
-                <TrendingUp className="h-3.5 w-3.5" />
-                Confirmed on current view
-              </p>
-            </div>
-            <div className="hero-card rounded-xl p-5">
-              <p className="section-kicker">Next Major Event</p>
-              {nextMajorEvent ? (
-                <>
-                  <p className="headline-font mt-4 text-xl font-bold tracking-[-0.04em] text-[var(--ink)]">{nextMajorEvent.event_title}</p>
-                  <p className="mt-2 text-sm text-[var(--muted)]">
-                    {new Date(nextMajorEvent.event_date).toLocaleDateString("en-US", {
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric"
-                    })}
-                    {" · "}
-                    {nextMajorEvent.location}
-                  </p>
-                </>
-              ) : (
-                <p className="mt-4 text-sm text-[var(--muted)]">No scheduled events on the current invitation view.</p>
-              )}
+          {error ? (
+            <InlineBanner
+              variant="error"
+              title="Invitations unavailable"
+              message={error}
+              className="mx-6 mt-5"
+              actionLabel="Retry"
+              onAction={() => void loadInvitations()}
+            />
+          ) : null}
+
+          <DataTable
+            columns={[
+              {
+                key: "id",
+                label: "Invitation ID",
+                render: (row) => <span className="font-mono text-xs font-semibold text-[var(--accent)]">{row.id.slice(0, 8)}</span>
+              },
+              {
+                key: "event_title",
+                label: "Event Name",
+                sortable: true,
+                sortKey: "event_title",
+                render: (row) => (
+                  <div className="max-w-[16rem]">
+                    <p className="truncate font-semibold text-[var(--ink)]" title={row.event_title}>
+                      {row.event_title}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-[var(--muted)]" title={row.description || undefined}>
+                      {row.description || "Event record"}
+                    </p>
+                  </div>
+                )
+              },
+              {
+                key: "inviting_organization",
+                label: "Organizer",
+                sortable: true,
+                sortKey: "inviting_organization",
+                render: (row) => (
+                  <span className="block max-w-[12rem] truncate" title={row.inviting_organization}>
+                    {row.inviting_organization}
+                  </span>
+                )
+              },
+              {
+                key: "event_date",
+                label: "Event Date",
+                sortable: true,
+                sortKey: "event_date",
+                render: (row) => formatDateTime(row.event_date)
+              },
+              {
+                key: "status_display",
+                label: "Status",
+                sortable: true,
+                sortKey: "status",
+                render: (row) => <StatusBadge status={row.status_display} />
+              },
+              {
+                key: "actions",
+                label: "Actions",
+                render: (row) => (
+                  <div className="flex justify-end">
+                    <Link
+                      to={`/invitations/${row.id}`}
+                      className="secondary-button inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold"
+                    >
+                      View Details
+                    </Link>
+                  </div>
+                )
+              }
+            ]}
+            rows={rows}
+            density="compact"
+            isLoading={isLoading}
+            loadingMessage="Loading invitations..."
+            sort={sort}
+            onSortChange={(next) => {
+              if (!next) {
+                setOrdering("event_date");
+                return;
+              }
+              setOrdering(`${next.direction === "desc" ? "-" : ""}${next.key}`);
+              setPage(1);
+            }}
+            pagination={{
+              page,
+              pageSize: 20,
+              count,
+              onPageChange: (nextPage) => setPage(nextPage)
+            }}
+          />
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-12">
+          <div className="xl:col-span-5">
+            <div className="surface-panel rounded-xl p-6">
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="headline-font text-xl font-bold tracking-[-0.04em] text-[var(--ink)]">Upcoming Invitations</h3>
+                <span className="rounded-full bg-[var(--surface-low)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  {upcomingInvitations.length}
+                </span>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {upcomingInvitations.length ? (
+                  upcomingInvitations.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => navigate(`/invitations/${item.id}`)}
+                      className="surface-panel flex w-full items-start gap-4 rounded-xl p-4 text-left"
+                    >
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-[var(--surface-low)]">
+                        <CalendarDays className="h-5 w-5 text-[var(--accent)]" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-[var(--ink)]">{item.event_title}</p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(item.event_date)}</p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">{item.location}</p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface-low)] px-4 py-8 text-center text-sm text-[var(--muted)]">
+                    No upcoming invitations are scheduled on this view.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {showComposer ? (
-          <div className="surface-panel rounded-xl p-6">
+          <div className="xl:col-span-7">
+            <div className="hero-card rounded-xl p-6 sm:p-8">
+              <div className="grid gap-6 md:grid-cols-[0.92fr_1.08fr] md:items-center">
+                <div>
+                  <h3 className="headline-font text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">
+                    Invitation Insights
+                  </h3>
+                  {insightRecord ? (
+                    <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+                      Next event: {insightRecord.event_title}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-sm leading-7 text-[var(--muted)]">No scheduled invitation is available on this view.</p>
+                  )}
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <div className="table-stat rounded-lg px-4 py-4">
+                      <p className="section-kicker">Response rate</p>
+                      <p className="mt-2 text-2xl font-bold text-[var(--ink)]">{attendanceRate}%</p>
+                    </div>
+                    <div className="table-stat rounded-lg px-4 py-4">
+                      <p className="section-kicker">Current page total</p>
+                      <p className="mt-2 text-2xl font-bold text-[var(--ink)]">{rows.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid place-items-center">
+                  <div
+                    className="relative grid h-48 w-48 place-items-center rounded-full"
+                    style={{
+                      background: `conic-gradient(var(--accent) 0deg, var(--accent) ${attendanceRate * 3.6}deg, var(--surface-container) ${attendanceRate * 3.6}deg 360deg)`
+                    }}
+                  >
+                    <div className="grid h-32 w-32 place-items-center rounded-full bg-[var(--surface-card)] text-center shadow-sm">
+                      <p className="headline-font text-3xl font-extrabold tracking-[-0.05em] text-[var(--ink)]">{attendanceRate}%</p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Response Rate</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {showComposer ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm"
+          onClick={() => {
+            if (!isCreating) {
+              setShowComposer(false);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="New invitation"
+            className="surface-panel w-full max-w-4xl rounded-2xl p-6 shadow-2xl sm:p-8"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="section-kicker">Issue Invitation</p>
-                <h3 className="headline-font mt-2 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">
-                  Register a New Invitation
+                <h3 className="headline-font text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">
+                  New Invitation
                 </h3>
-                <p className="mt-2 text-sm text-[var(--muted)]">Capture event, organizer, and contact details before routing the record for review.</p>
               </div>
-              <span className="rounded-sm bg-[var(--surface-low)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                Form
-              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isCreating) {
+                    setShowComposer(false);
+                  }
+                }}
+                className="secondary-button inline-flex h-10 w-10 items-center justify-center rounded-md"
+                aria-label="Close invitation form"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-            <div className="mt-6 grid gap-3 md:grid-cols-2">
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
               {invitationFields.map((field) => (
                 <label key={field.key} className={`grid gap-2 ${field.key === "description" ? "md:col-span-2" : ""}`}>
                   <span className="section-kicker">{field.label}</span>
@@ -234,20 +545,22 @@ export function InvitationsPage() {
                     onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}
                     placeholder={field.label}
                     type={field.type}
-                    className="institutional-input rounded-md px-4 py-3 outline-none"
+                    disabled={isCreating}
+                    className="institutional-input rounded-md px-4 py-3 outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </label>
               ))}
             </div>
 
-            <div className="mt-5 flex flex-wrap justify-end gap-3">
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
               <button
                 type="button"
+                disabled={isCreating}
                 onClick={() => {
                   setDraft(emptyDraft);
                   setShowComposer(false);
                 }}
-                className="secondary-button rounded-md px-4 py-2.5 text-sm font-semibold"
+                className="secondary-button rounded-md px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Discard
               </button>
@@ -255,216 +568,78 @@ export function InvitationsPage() {
                 type="button"
                 disabled={isCreating}
                 onClick={() => void handleCreate()}
-                className="primary-button rounded-md px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
+                className="primary-button rounded-md px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isCreating ? "Registering..." : "Issue Invitation"}
+                {isCreating ? (
+                  <span className="flex items-center gap-2">
+                    <span className="spin inline-block h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white" />
+                    Registering...
+                  </span>
+                ) : (
+                  "Create Invitation"
+                )}
               </button>
             </div>
           </div>
-        ) : (
-          <div className="hero-card rounded-xl p-6">
-            <p className="section-kicker">Invitation Pulse</p>
-            <h3 className="headline-font mt-3 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">
-              Review-ready executive invitations
-            </h3>
-            <p className="mt-3 max-w-lg text-sm leading-7 text-[var(--muted)]">
-              The registry is aligned for director review, acceptance, decline, and attendance confirmation with full record history preserved on each invitation.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <div className="table-stat rounded-lg px-4 py-3">
-                <p className="section-kicker">Registry total</p>
-                <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{count} invitations</p>
-              </div>
-              <div className="table-stat rounded-lg px-4 py-3">
-                <p className="section-kicker">Current status filter</p>
-                <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{status || "All statuses"}</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="surface-panel rounded-xl overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-low)] px-6 py-4">
-          <div>
-            <h3 className="headline-font text-base font-bold tracking-[-0.03em] text-[var(--ink)]">Current Invitation Registry</h3>
-            <p className="mt-1 text-sm text-[var(--muted)]">Review invitation status, organizer details, and upcoming engagement dates.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <label className="relative min-w-[16rem]">
-              <input
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(1);
-                }}
-                placeholder="Search invitations, organizers, or IDs"
-                className="institutional-input w-full rounded-md px-4 py-2.5 pr-10 text-sm outline-none"
-              />
-            </label>
-            <select
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value);
-                setPage(1);
-              }}
-              className="institutional-input rounded-md px-4 py-2.5 text-sm outline-none"
-            >
-              <option value="">All statuses</option>
-              <option value="pending_review">Pending Review</option>
-              <option value="accepted">Accepted</option>
-              <option value="declined">Declined</option>
-              <option value="confirmed_attendance">Confirmed Attendance</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="archived">Archived</option>
-            </select>
-            <button type="button" onClick={() => downloadInvitationsCsv(rows)} className="secondary-button inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold">
-              <Download className="h-4 w-4" />
-              Export
-            </button>
-            <button type="button" onClick={() => window.print()} className="secondary-button inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold">
-              <Printer className="h-4 w-4" />
-              Print
-            </button>
-          </div>
         </div>
+      ) : null}
+    </>
+  );
+}
 
-        {error ? <InlineBanner variant="error" title="Invitations unavailable" message={error} className="mx-6 mt-5" actionLabel="Retry" onAction={() => void loadInvitations()} /> : null}
+function InvitationMetricCard({
+  label,
+  value,
+  note,
+  accent = false,
+  icon
+}: {
+  label: string;
+  value: string | number;
+  note: string;
+  accent?: boolean;
+  icon?: JSX.Element;
+}) {
+  return (
+    <div className="metric-segment">
+      <p className="section-kicker">{label}</p>
+      <p className={`headline-font mt-1.5 text-2xl font-extrabold tracking-[-0.06em] ${accent ? "text-[var(--accent)]" : "text-[var(--ink)]"}`}>
+        {value}
+      </p>
+      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-[var(--muted)]">
+        {icon}
+        <span>{note}</span>
+      </p>
+    </div>
+  );
+}
 
-        <DataTable
-          columns={[
-            {
-              key: "id",
-              label: "Invitation ID",
-              render: (row) => <span className="font-mono text-xs font-semibold text-[var(--accent)]">{row.id.slice(0, 8)}</span>
-            },
-            {
-              key: "event_title",
-              label: "Event Name",
-              sortable: true,
-              sortKey: "event_title",
-              render: (row) => (
-                <div>
-                  <p className="font-semibold text-[var(--ink)]">{row.event_title}</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">{row.description || "Institutional event record"}</p>
-                </div>
-              )
-            },
-            { key: "inviting_organization", label: "Organizer", sortable: true, sortKey: "inviting_organization" },
-            {
-              key: "event_date",
-              label: "Event Date",
-              sortable: true,
-              sortKey: "event_date",
-              render: (row) => formatDateTime(row.event_date)
-            },
-            {
-              key: "status_display",
-              label: "Status",
-              sortable: true,
-              sortKey: "status",
-              render: (row) => <StatusBadge status={row.status_display} />
-            },
-            {
-              key: "actions",
-              label: "Actions",
-              render: (row) => (
-                <div className="flex justify-end">
-                  <Link
-                    to={`/invitations/${row.id}`}
-                    className="secondary-button inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold"
-                  >
-                    View Details
-                  </Link>
-                </div>
-              )
-            }
-          ]}
-          rows={rows}
-          isLoading={isLoading}
-          loadingMessage="Loading invitation registry..."
-          sort={sort}
-          onSortChange={(next) => {
-            if (!next) {
-              setOrdering("event_date");
-              return;
-            }
-            setOrdering(`${next.direction === "desc" ? "-" : ""}${next.key}`);
-            setPage(1);
-          }}
-          pagination={{
-            page,
-            pageSize: 20,
-            count,
-            onPageChange: (nextPage) => setPage(nextPage)
-          }}
-        />
-      </section>
+function InvitationMajorEventCard({ event }: { event: InvitationRecord | undefined }) {
+  return (
+    <div className="hero-card rounded-xl p-3.5">
+      <p className="section-kicker">Next Major Event</p>
+      {event ? (
+        <>
+          <p className="headline-font mt-2 line-clamp-1 text-sm font-bold tracking-[-0.03em] text-[var(--ink)]">
+            {event.event_title}
+          </p>
+          <p className="mt-1 line-clamp-1 text-xs text-[var(--muted)]">
+            {formatEventDateLabel(event.event_date)} {" · "} {event.location}
+          </p>
+        </>
+      ) : (
+        <p className="mt-2 line-clamp-2 text-xs text-[var(--muted)]">No scheduled event on this view.</p>
+      )}
+    </div>
+  );
+}
 
-      <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="space-y-4">
-          <div>
-            <p className="section-kicker">Upcoming Invitations</p>
-            <h3 className="headline-font mt-2 text-xl font-bold tracking-[-0.04em] text-[var(--ink)]">Near-term engagements</h3>
-          </div>
-          {upcomingInvitations.length ? (
-            upcomingInvitations.map((item) => (
-                <button key={item.id} type="button" onClick={() => navigate(`/invitations/${item.id}`)} className="surface-panel flex w-full items-start gap-4 rounded-xl p-4 text-left">
-                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-[var(--surface-low)]">
-                  <CalendarDays className="h-5 w-5 text-[var(--accent)]" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-[var(--ink)]">{item.event_title}</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(item.event_date)}</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">{item.location}</p>
-                </div>
-              </button>
-            ))
-          ) : (
-            <div className="surface-panel rounded-xl p-5 text-sm text-[var(--muted)]">No upcoming invitations are scheduled on this view.</div>
-          )}
-        </div>
-
-        <div className="hero-card rounded-xl p-8">
-          <div className="grid gap-6 md:grid-cols-[0.9fr_1.1fr]">
-            <div>
-              <p className="section-kicker">Invitation Insights</p>
-              <h3 className="headline-font mt-3 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">
-                Institutional response summary
-              </h3>
-              <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-                {insightRecord
-                  ? `The next highlighted event is ${insightRecord.event_title}. Use the registry to confirm attendance, review institutional context, and keep decision history attached to the record.`
-                  : "As invitations arrive, this panel will summarize response progress and highlight the next event requiring attention."}
-              </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="table-stat rounded-lg px-4 py-4">
-                  <p className="section-kicker">Response rate</p>
-                  <p className="mt-2 text-2xl font-bold text-[var(--ink)]">{attendanceRate}%</p>
-                </div>
-                <div className="table-stat rounded-lg px-4 py-4">
-                  <p className="section-kicker">Current page total</p>
-                  <p className="mt-2 text-2xl font-bold text-[var(--ink)]">{rows.length}</p>
-                </div>
-              </div>
-            </div>
-            <div className="grid place-items-center">
-              <div
-                className="relative grid h-48 w-48 place-items-center rounded-full"
-                style={{
-                  background: `conic-gradient(var(--accent) 0deg, var(--accent) ${attendanceRate * 3.6}deg, var(--surface-container) ${attendanceRate * 3.6}deg 360deg)`
-                }}
-              >
-                <div className="grid h-32 w-32 place-items-center rounded-full bg-[var(--surface-card)] text-center shadow-sm">
-                  <p className="headline-font text-3xl font-extrabold tracking-[-0.05em] text-[var(--ink)]">{attendanceRate}%</p>
-                  <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Response Rate</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+function OverviewStat({ label, value, helper }: { label: string; value: string; helper: string }) {
+  return (
+    <div className="table-stat rounded-lg px-3 py-3">
+      <p className="section-kicker">{label}</p>
+      <p className="mt-1 line-clamp-1 text-base font-semibold text-[var(--ink)]">{value}</p>
+      <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">{helper}</p>
     </div>
   );
 }

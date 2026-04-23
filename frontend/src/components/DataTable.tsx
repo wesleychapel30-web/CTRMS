@@ -21,6 +21,7 @@ type DataTableProps<T> = {
   isLoading?: boolean;
   loadingMessage?: string;
   loadingRowCount?: number;
+  density?: "default" | "compact";
   sort?: SortState | null;
   onSortChange?: (next: SortState | null) => void;
   pagination?: {
@@ -38,11 +39,16 @@ export function DataTable<T extends Record<string, unknown>>({
   isLoading = false,
   loadingMessage = "Loading records...",
   loadingRowCount = 5,
+  density = "default",
   sort,
   onSortChange,
   pagination
 }: DataTableProps<T>) {
   const totalPages = pagination ? Math.max(1, Math.ceil(pagination.count / pagination.pageSize)) : 1;
+  const headerPadding = density === "compact" ? "px-5 py-3" : "px-6 py-4";
+  const cellPadding = density === "compact" ? "px-5 py-3 align-top" : "px-6 py-4";
+  const emptyPadding = density === "compact" ? "px-5 py-6" : "px-6 py-10";
+  const paginationPadding = density === "compact" ? "px-5 py-3" : "px-6 py-4";
 
   if (isLoading) {
     return <TableSkeleton columns={columns.length} rows={loadingRowCount} message={loadingMessage} />;
@@ -55,7 +61,7 @@ export function DataTable<T extends Record<string, unknown>>({
           <thead className="bg-[var(--surface-low)] text-[var(--muted)]">
             <tr>
               {columns.map((column) => (
-                <th key={column.label} className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.16em]">
+                <th key={column.label} className={`${headerPadding} text-[10px] font-bold uppercase tracking-[0.16em]`}>
                   {column.sortable && onSortChange ? (
                     <button
                       type="button"
@@ -92,15 +98,15 @@ export function DataTable<T extends Record<string, unknown>>({
           <tbody>
             {!rows.length ? (
               <tr>
-                <td colSpan={columns.length} className="px-6 py-10 text-center text-sm text-[var(--muted)]">
+                <td colSpan={columns.length} className={`${emptyPadding} text-center text-sm text-[var(--muted)]`}>
                   {emptyMessage}
                 </td>
               </tr>
             ) : null}
             {rows.map((row, index) => (
-              <tr key={index} className="group transition hover:bg-[var(--surface-low)]/50">
+              <tr key={index} className="group border-t border-[var(--surface-container)]/70 transition first:border-t-0 hover:bg-[var(--surface-low)]/50">
                 {columns.map((column) => (
-                  <td key={column.label} className="px-6 py-4 text-[var(--ink)]">
+                  <td key={column.label} className={`${cellPadding} text-[var(--ink)]`}>
                     {column.render ? column.render(row) : String(row[column.key as keyof T] ?? "")}
                   </td>
                 ))}
@@ -110,7 +116,7 @@ export function DataTable<T extends Record<string, unknown>>({
         </table>
       </div>
       {pagination ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--surface-low)] px-6 py-4 text-sm text-[var(--muted)]">
+        <div className={`flex flex-wrap items-center justify-between gap-3 bg-[var(--surface-low)] text-sm text-[var(--muted)] ${paginationPadding}`}>
           <span>
             Page <strong className="text-[var(--ink)]">{pagination.page}</strong> of{" "}
             <strong className="text-[var(--ink)]">{totalPages}</strong>

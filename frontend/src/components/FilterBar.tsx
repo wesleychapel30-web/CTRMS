@@ -7,8 +7,8 @@ type FilterBarProps = {
 
 export function FilterBar({ children, className }: FilterBarProps) {
   return (
-    <div className={`mb-4 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 ${className ?? ""}`}>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{children}</div>
+    <div className={`mb-4 rounded-xl border border-[var(--line)] bg-[var(--surface-card)] p-3 ${className ?? ""}`}>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{children}</div>
     </div>
   );
 }

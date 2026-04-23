@@ -10,18 +10,44 @@ import os
 
 class Request(models.Model):
     """Request model for assistance requests such as tuition, medical, construction, and event sponsorship."""
-    
+
+    class WorkflowRoute(models.TextChoices):
+        NORMAL_FUNDED = 'normal_funded', _('Normal Funded Request')
+        INVENTORY = 'inventory', _('Inventory Request')
+
+    # Categories that route through Director → Finance → Paid
+    NORMAL_FUNDED_CATEGORIES = {
+        'tuition', 'medical', 'construction', 'event_sponsorship',
+        'welfare', 'operational_support', 'reimbursement', 'petty_cash',
+        'finance_request', 'other',
+    }
+
     class Category(models.TextChoices):
         TUITION = 'tuition', _('Tuition')
         MEDICAL = 'medical', _('Medical Support')
         CONSTRUCTION = 'construction', _('Construction Aid')
         EVENT_SPONSORSHIP = 'event_sponsorship', _('Event Sponsorship')
+        WELFARE = 'welfare', _('Welfare Support')
+        OPERATIONAL_SUPPORT = 'operational_support', _('Operational Support')
+        REIMBURSEMENT = 'reimbursement', _('Reimbursement')
+        PETTY_CASH = 'petty_cash', _('Petty Cash / Advance')
+        FINANCE_REQUEST = 'finance_request', _('Finance Request')
+        INVENTORY_REQUEST = 'inventory_request', _('Inventory Request')
         OTHER = 'other', _('Other')
-    
+
     class Status(models.TextChoices):
         DRAFT = 'draft', _('Draft')
         PENDING = 'pending', _('Submitted')
-        UNDER_REVIEW = 'under_review', _('Under Review')
+        UNDER_REVIEW = 'under_review', _('Director Review')
+        # Director decisions
+        DIRECTOR_APPROVED = 'director_approved', _('Director Approved')
+        DIRECTOR_REJECTED = 'director_rejected', _('Director Rejected')
+        NEEDS_CLARIFICATION = 'needs_clarification', _('Needs Clarification')
+        # Finance processing (normal_funded route)
+        FINANCE_PROCESSING = 'finance_processing', _('Finance Processing')
+        FINANCE_QUERY = 'finance_query', _('Finance Query')
+        PENDING_PAYMENT = 'pending_payment', _('Pending Payment')
+        # Final states
         APPROVED = 'approved', _('Approved')
         REJECTED = 'rejected', _('Rejected')
         PARTIALLY_PAID = 'partially_paid', _('Partially Paid')
@@ -90,6 +116,12 @@ class Request(models.Model):
         default=Status.PENDING,
         db_index=True
     )
+    workflow_route = models.CharField(
+        max_length=30,
+        choices=WorkflowRoute.choices,
+        default=WorkflowRoute.NORMAL_FUNDED,
+        db_index=True,
+    )
 
     created_by = models.ForeignKey(
         'core.User',
@@ -109,7 +141,18 @@ class Request(models.Model):
     )
     review_notes = models.TextField(blank=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
-    
+
+    # Finance Processing
+    finance_processed_by = models.ForeignKey(
+        'core.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='finance_processed_requests',
+    )
+    finance_notes = models.TextField(blank=True)
+    finance_processed_at = models.DateTimeField(null=True, blank=True)
+
     # Payment Information
     payment_date = models.DateTimeField(null=True, blank=True)
     payment_method = models.CharField(
@@ -146,11 +189,17 @@ class Request(models.Model):
                 created_at__date=timezone.now().date()
             ).count() + 1
             self.request_id = f"REQ-{date_str}-{count:06d}"
-        
+
+        # Derive workflow route from category
+        if self.category == self.Category.INVENTORY_REQUEST:
+            self.workflow_route = self.WorkflowRoute.INVENTORY
+        else:
+            self.workflow_route = self.WorkflowRoute.NORMAL_FUNDED
+
         # Calculate remaining balance
         if self.approved_amount is not None:
             self.remaining_balance = self.approved_amount - self.disbursed_amount
-        
+
         super().save(*args, **kwargs)
 
 
@@ -220,6 +269,12 @@ class RequestHistory(models.Model):
         UPDATED = 'updated', _('Updated')
         SUBMITTED = 'submitted', _('Submitted')
         MOVED_TO_REVIEW = 'moved_to_review', _('Moved to review')
+        DIRECTOR_APPROVED = 'director_approved', _('Director approved')
+        DIRECTOR_REJECTED = 'director_rejected', _('Director rejected')
+        CLARIFICATION_REQUESTED = 'clarification_requested', _('Clarification requested')
+        FINANCE_PROCESSING = 'finance_processing', _('Finance processing started')
+        FINANCE_QUERY = 'finance_query', _('Finance query raised')
+        PENDING_PAYMENT = 'pending_payment', _('Pending payment')
         APPROVED = 'approved', _('Approved')
         REJECTED = 'rejected', _('Rejected')
         PARTIALLY_PAID = 'partially_paid', _('Partially paid')

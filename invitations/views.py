@@ -1,10 +1,15 @@
+import logging
+from datetime import timedelta
+
+from django.core.exceptions import ValidationError
+from django.http import FileResponse
+from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.core.exceptions import ValidationError
-from django.utils import timezone
-from datetime import timedelta
-from django_filters.rest_framework import DjangoFilterBackend
+
+logger = logging.getLogger(__name__)
 from django_filters import rest_framework as drf_filters
 from invitations.services import send_due_invitation_reminders
 from core.models import AuditLog, User
@@ -754,9 +759,13 @@ class InvitationAttachmentViewSet(viewsets.ReadOnlyModelViewSet):
     def download(self, request, pk=None):
         attachment = self.get_object()
         file = attachment.file.open("rb")
-        response = __import__("django.http", fromlist=["FileResponse"]).FileResponse(file)
         filename = (attachment.file.name or "").split("/")[-1]
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        inline = request.query_params.get("disposition") == "inline"
+        response = FileResponse(
+            file,
+            as_attachment=not inline,
+            filename=filename,
+        )
 
         AuditLog.objects.create(
             user=request.user,

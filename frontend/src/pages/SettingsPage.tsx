@@ -67,7 +67,7 @@ export function SettingsPage() {
     if (error) {
       return <StatePanel variant="error" title="Settings unavailable" message={error} />;
     }
-    return <StatePanel variant="loading" title="Loading settings" message="Preparing branding, communication, and access controls." />;
+    return <StatePanel variant="loading" title="Loading settings" message="Loading branding, email, and access settings." />;
   }
 
   const current = (draft ?? settings) as SettingsOverview;
@@ -152,14 +152,10 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[18rem_minmax(0,1fr)]">
+    <div className="grid gap-5 xl:grid-cols-[16rem_minmax(0,1fr)]">
       <aside className="space-y-4">
         <div className="surface-panel rounded-xl p-4">
-          <p className="section-kicker">System Settings</p>
-          <h2 className="headline-font mt-3 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">Configuration Console</h2>
-          <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-            Configure branding, communications, reminders, and system access from one control surface.
-          </p>
+          <h2 className="headline-font text-base font-bold tracking-[-0.03em] text-[var(--ink)]">Settings</h2>
         </div>
 
         <div className="space-y-1 rounded-xl bg-[var(--surface-low)] p-2">
@@ -182,29 +178,29 @@ export function SettingsPage() {
         </div>
       </aside>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {error ? <InlineBanner variant="error" title="Settings update failed" message={error} /> : null}
 
         {activeTab === "branding" ? (
-          <div className="space-y-6">
-            <section className="surface-panel rounded-xl p-6">
+          <div className="space-y-4">
+            <section className="surface-panel rounded-xl p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="section-kicker">Visual Identity</p>
-                  <h3 className="headline-font mt-2 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">Logo, favicon, and banner assets</h3>
+                  <h3 className="headline-font mt-1.5 text-base font-bold tracking-[-0.03em] text-[var(--ink)]">Logo, favicon, and banner assets</h3>
                 </div>
                 <span className="rounded-sm bg-[var(--surface-low)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
                   Branding
                 </span>
               </div>
 
-              <div className="mt-6 grid gap-6 md:grid-cols-3">
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <AssetTile label="Institutional Logo" url={current.organization_settings.logo_url} />
                 <AssetTile label="Favicon" url={current.organization_settings.favicon_url} />
                 <AssetTile label="Banner" url={current.organization_settings.banner_url} />
               </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <UploadField
                   label="Upload logo"
                   disabled={isUploading}
@@ -292,10 +288,10 @@ export function SettingsPage() {
         ) : null}
 
         {activeTab === "organization" ? (
-          <section className="surface-panel rounded-xl p-6">
+          <section className="surface-panel rounded-xl p-4">
             <p className="section-kicker">Organization Profile</p>
-            <h3 className="headline-font mt-2 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">Institution contact information</h3>
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <h3 className="headline-font mt-1.5 text-base font-bold tracking-[-0.03em] text-[var(--ink)]">Institution contact information</h3>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               <InputField
                 label="Name"
                 value={current.organization_settings.organization_name}
@@ -349,9 +345,9 @@ export function SettingsPage() {
         ) : null}
 
         {activeTab === "notifications" ? (
-          <section className="surface-panel rounded-xl p-6">
+          <section className="surface-panel rounded-xl p-4">
             <p className="section-kicker">Notifications</p>
-            <h3 className="headline-font mt-2 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">Delivery preferences and reminder policies</h3>
+            <h3 className="headline-font mt-1.5 text-base font-bold tracking-[-0.03em] text-[var(--ink)]">Delivery preferences and reminder policies</h3>
             <div className="mt-6 grid gap-3">
               <ToggleField
                 label="Email notifications"
@@ -417,11 +413,11 @@ export function SettingsPage() {
         ) : null}
 
         {activeTab === "smtp" ? (
-          <section className="surface-panel rounded-xl p-6">
+          <section className="surface-panel rounded-xl p-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="section-kicker">SMTP Configuration</p>
-                <h3 className="headline-font mt-2 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">Email delivery settings</h3>
+                <h3 className="headline-font mt-1.5 text-base font-bold tracking-[-0.03em] text-[var(--ink)]">Email delivery settings</h3>
               </div>
               <button
                 type="button"
@@ -444,7 +440,7 @@ export function SettingsPage() {
               </button>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
                 <InputField
                   label="SMTP host"
@@ -535,11 +531,11 @@ export function SettingsPage() {
         ) : null}
 
         {activeTab === "access" ? (
-          <section className="surface-panel rounded-xl p-6">
+          <section className="surface-panel rounded-xl p-4">
             <p className="section-kicker">Access Control</p>
-            <h3 className="headline-font mt-2 text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">Password and recovery controls</h3>
+            <h3 className="headline-font mt-1.5 text-base font-bold tracking-[-0.03em] text-[var(--ink)]">Password and recovery controls</h3>
             {forcePasswordChange ? (
-              <p className="mt-4 rounded-md bg-[#fff5e6] px-4 py-3 text-sm text-[var(--warning)]">
+              <p className="mt-4 rounded-md bg-[var(--status-warning-bg)] px-4 py-3 text-sm text-[var(--status-warning-text)]">
                 Password change is required before continuing.
               </p>
             ) : null}

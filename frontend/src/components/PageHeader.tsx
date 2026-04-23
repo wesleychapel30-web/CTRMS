@@ -3,11 +3,12 @@ type PageHeaderProps = {
   subtitle?: string;
 };
 
-export function PageHeader({ title, subtitle }: PageHeaderProps) {
+export function PageHeader({ title }: PageHeaderProps) {
   return (
     <div className="min-w-0">
-      <h1 className="headline-font text-[1.95rem] font-extrabold tracking-[-0.04em] text-[var(--ink)]">{title}</h1>
-      {subtitle ? <p className="mt-1 max-w-3xl text-sm font-medium text-[var(--muted)]">{subtitle}</p> : null}
+      <h1 className="headline-font text-2xl font-extrabold tracking-[-0.03em] text-[var(--ink)] sm:text-[1.75rem]">
+        {title}
+      </h1>
     </div>
   );
 }

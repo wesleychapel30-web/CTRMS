@@ -41,6 +41,11 @@ export function ActivityPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
+  const [userFilter, setUserFilter] = useState("all");
+  const [recordFilter, setRecordFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const canViewAudit = hasPermission("audit:view");
 
   useEffect(() => {
@@ -63,80 +68,84 @@ export function ActivityPage() {
       const haystack = `${row.user} ${row.action_label} ${row.content_type} ${row.description} ${row.message ?? ""}`.toLowerCase();
       const matchesQuery = !query.trim() || haystack.includes(query.trim().toLowerCase());
       const matchesAction = actionFilter === "all" || row.action_label === actionFilter;
-      return matchesQuery && matchesAction;
+      const matchesUser = userFilter === "all" || row.user === userFilter;
+      const matchesRecord = recordFilter === "all" || row.content_type === recordFilter;
+      const entryDate = row.created_at.slice(0, 10);
+      const matchesFromDate = !fromDate || entryDate >= fromDate;
+      const matchesToDate = !toDate || entryDate <= toDate;
+      return matchesQuery && matchesAction && matchesUser && matchesRecord && matchesFromDate && matchesToDate;
     });
-  }, [actionFilter, logs, query]);
+  }, [actionFilter, fromDate, logs, query, recordFilter, toDate, userFilter]);
 
   const uniqueUsers = new Set(filteredLogs.map((row) => row.user)).size;
   const flaggedEvents = filteredLogs.filter((row) => /denied|rejected|failed|error|blocked/i.test(row.action_label) || /denied|rejected|failed|error|blocked/i.test(row.description)).length;
   const modifiedSettings = filteredLogs.filter((row) => /setting|config/i.test(row.content_type) || /setting|config/i.test(row.action_label)).length;
   const actionOptions = Array.from(new Set(logs.map((row) => row.action_label))).sort();
+  const userOptions = Array.from(new Set(logs.map((row) => row.user).filter(Boolean))).sort();
+  const recordOptions = Array.from(new Set(logs.map((row) => row.content_type).filter(Boolean))).sort();
 
   if (!canViewAudit) {
-    return <StatePanel variant="info" title="Activity logs restricted" message="Only administrators and directors can view the audit trail." />;
+    return <StatePanel variant="info" title="Activity logs restricted" message="Only authorized roles can view activity logs." />;
   }
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="section-kicker">Activity Logs</p>
-            <h2 className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em] text-[var(--ink)]">
-              Institutional audit trail
-            </h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--muted)]">
-              Review user actions, administrative changes, and record-level audit events across the system.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
+    <div className="space-y-4">
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="headline-font text-xl font-extrabold tracking-[-0.04em] text-[var(--ink)]">
+            Activity Logs
+          </h2>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => downloadCsv(filteredLogs)}
-              className="secondary-button inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold"
+              className="secondary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
             >
-              <Download className="h-4 w-4" />
+              <Download className="h-3.5 w-3.5" />
               Export CSV
             </button>
-            <button type="button" className="primary-button inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold">
-              <Filter className="h-4 w-4" />
-              Advanced Filters
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters((current) => !current)}
+              className="primary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              {showAdvancedFilters ? "Hide Filters" : "Advanced Filters"}
             </button>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="dark-hero-card rounded-xl px-6 py-5 text-white">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="dark-hero-card rounded-xl px-4 py-3 text-white">
             <p className="section-kicker text-white/55">Critical Failures</p>
-            <p className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em]">{flaggedEvents}</p>
-            <p className="mt-2 text-sm text-white/65">Flagged events in current view</p>
+            <p className="headline-font mt-2 text-2xl font-extrabold tracking-[-0.06em]">{flaggedEvents}</p>
+            <p className="mt-1 text-xs text-white/65">Flagged events</p>
           </div>
-          <div className="surface-panel rounded-xl px-6 py-5">
+          <div className="surface-panel rounded-xl px-4 py-3">
             <p className="section-kicker">Active Users</p>
-            <p className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em]">{uniqueUsers}</p>
-            <p className="mt-2 text-sm text-[var(--muted)]">Distinct users in filtered logs</p>
+            <p className="headline-font mt-2 text-2xl font-extrabold tracking-[-0.06em]">{uniqueUsers}</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">Users in view</p>
           </div>
-          <div className="surface-panel rounded-xl px-6 py-5">
+          <div className="surface-panel rounded-xl px-4 py-3">
             <p className="section-kicker">Configuration Actions</p>
-            <p className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em]">{modifiedSettings}</p>
-            <p className="mt-2 text-sm text-[var(--danger)]">Settings or configuration updates</p>
+            <p className="headline-font mt-2 text-2xl font-extrabold tracking-[-0.06em]">{modifiedSettings}</p>
+            <p className="mt-1 text-xs text-[var(--danger)]">Settings changes</p>
           </div>
         </div>
       </section>
 
       <section className="surface-panel overflow-hidden rounded-xl">
-        <div className="grid gap-3 bg-[var(--surface-low)] px-6 py-4 md:grid-cols-[1.2fr_0.9fr_0.9fr_auto]">
+        <div className="grid gap-2 bg-[var(--surface-low)] px-4 py-3 md:grid-cols-[1.2fr_0.9fr_0.9fr_auto]">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search activity logs, record IDs, or users"
-            className="institutional-input rounded-md px-4 py-2.5 outline-none"
+            className="institutional-input rounded-md px-3 py-2 text-sm outline-none"
           />
           <select
             value={actionFilter}
             onChange={(event) => setActionFilter(event.target.value)}
-            className="institutional-input rounded-md px-4 py-2.5 outline-none"
+            className="institutional-input rounded-md px-3 py-2 text-sm outline-none"
           >
             <option value="all">All actions</option>
             {actionOptions.map((option) => (
@@ -145,10 +154,55 @@ export function ActivityPage() {
               </option>
             ))}
           </select>
-          <div className="table-stat rounded-md px-4 py-2.5 text-sm font-medium text-[var(--muted)]">
+          <div className="table-stat rounded-md px-3 py-2 text-xs font-medium text-[var(--muted)]">
             Showing {filteredLogs.length} records
           </div>
         </div>
+
+        {showAdvancedFilters ? (
+          <div className="grid gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-4 py-3 md:grid-cols-4">
+            <select
+              value={userFilter}
+              onChange={(event) => setUserFilter(event.target.value)}
+              className="institutional-input rounded-md px-3 py-2 outline-none"
+            >
+              <option value="all">All users</option>
+              {userOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <select
+              value={recordFilter}
+              onChange={(event) => setRecordFilter(event.target.value)}
+              className="institutional-input rounded-md px-3 py-2 outline-none"
+            >
+              <option value="all">All record types</option>
+              {recordOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="institutional-input rounded-md px-3 py-2 outline-none" />
+            <div className="flex gap-3">
+              <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="institutional-input min-w-0 flex-1 rounded-md px-3 py-2 outline-none" />
+              <button
+                type="button"
+                onClick={() => {
+                  setUserFilter("all");
+                  setRecordFilter("all");
+                  setFromDate("");
+                  setToDate("");
+                }}
+                className="secondary-button rounded-md px-3 py-2 text-sm font-semibold"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {error ? <InlineBanner variant="error" title="Activity logs unavailable" message={error} className="mx-6 mt-5" /> : null}
 

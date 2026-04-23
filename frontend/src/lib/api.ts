@@ -1,11 +1,17 @@
 import type {
   ActivityLogRecord,
+  ApprovalInbox,
   AdminOverview,
   ApiListResponse,
   BrandingSettings,
   DashboardOverview,
   DocumentRecord,
+  EnterpriseOverview,
+  FinanceWorkspace,
   InvitationRecord,
+  InventoryWorkspace,
+  OrganizationWorkspace,
+  ProcurementWorkspace,
   NotificationItem,
   SearchResult,
   RequestRecord,
@@ -27,6 +33,48 @@ export class ApiError extends Error {
 
 export function isAuthError(error: unknown) {
   return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
+function collectApiMessages(value: unknown, fieldName?: string): string[] {
+  if (!value) {
+    return [];
+  }
+  if (typeof value === "string") {
+    return [fieldName ? `${fieldName}: ${value}` : value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectApiMessages(item, fieldName));
+  }
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, nestedValue]) =>
+      collectApiMessages(nestedValue, key === "non_field_errors" ? undefined : key)
+    );
+  }
+  return [];
+}
+
+function getApiErrorMessage(data: unknown, status: number) {
+  const directMessage =
+    data && typeof data === "object"
+      ? (data as { error?: unknown; detail?: unknown; message?: unknown }).error ??
+        (data as { error?: unknown; detail?: unknown; message?: unknown }).detail ??
+        (data as { error?: unknown; detail?: unknown; message?: unknown }).message
+      : data;
+
+  if (typeof directMessage === "string" && directMessage.trim()) {
+    return directMessage;
+  }
+
+  const messages = collectApiMessages(data).filter(Boolean);
+  if (messages.length) {
+    return messages.slice(0, 3).join(" ");
+  }
+
+  if (status >= 500) {
+    return "Server error. Please check the backend logs.";
+  }
+
+  return "Request failed";
 }
 
 function getCookie(name: string) {
@@ -63,7 +111,7 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const data = contentType.includes("application/json") ? await response.json() : null;
 
   if (!response.ok) {
-    const message = data?.error ?? data?.detail ?? "Request failed";
+    const message = getApiErrorMessage(data, response.status);
     throw new ApiError(message, response.status);
   }
 
@@ -71,9 +119,29 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export function buildApiUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
   return `${base}${normalizedPath}`;
+}
+
+export function resolveAssetUrl(path?: string | null) {
+  if (!path) {
+    return "";
+  }
+  return buildApiUrl(path);
+}
+
+export function buildAttachmentPreviewUrl(downloadPath?: string | null, fallbackPath?: string | null) {
+  const resolvedDownloadPath = resolveAssetUrl(downloadPath);
+  if (resolvedDownloadPath) {
+    const url = new URL(resolvedDownloadPath, window.location.origin);
+    url.searchParams.set("disposition", "inline");
+    return url.toString();
+  }
+  return resolveAssetUrl(fallbackPath);
 }
 
 export async function fetchSession() {
@@ -242,6 +310,37 @@ export async function addRequestTimelineEntry(requestId: string, payload: { mode
   return apiFetch<RequestRecord>(`/api/requests/${requestId}/timeline_entries/`, {
     method: "POST",
     body: JSON.stringify(payload)
+  });
+}
+
+export async function requestClarification(requestId: string, reviewNotes: string) {
+  return apiFetch<RequestRecord>(`/api/requests/${requestId}/request_clarification/`, {
+    method: "POST",
+    body: JSON.stringify({ review_notes: reviewNotes })
+  });
+}
+
+export async function financeStartProcessing(requestId: string, financeNotes = "") {
+  return apiFetch<RequestRecord>(`/api/requests/${requestId}/finance_start_processing/`, {
+    method: "POST",
+    body: JSON.stringify({ finance_notes: financeNotes })
+  });
+}
+
+export async function financeRaiseQuery(requestId: string, financeNotes: string) {
+  return apiFetch<RequestRecord>(`/api/requests/${requestId}/finance_raise_query/`, {
+    method: "POST",
+    body: JSON.stringify({ finance_notes: financeNotes })
+  });
+}
+
+export async function financeMarkPendingPayment(requestId: string, financeNotes = "", approvedAmount?: number) {
+  return apiFetch<RequestRecord>(`/api/requests/${requestId}/finance_mark_pending_payment/`, {
+    method: "POST",
+    body: JSON.stringify({
+      finance_notes: financeNotes,
+      ...(approvedAmount !== undefined ? { approved_amount: approvedAmount } : {})
+    })
   });
 }
 
@@ -483,6 +582,359 @@ export async function uploadOrganizationAssets(files: { logo?: File; favicon?: F
   }
   return apiFetch<{ success: boolean; organization_settings: { logo_url: string; favicon_url: string; banner_url: string } }>(
     "/api/system-settings-assets/",
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+}
+
+export async function fetchEnterpriseOverview() {
+  return apiFetch<{ success: boolean } & EnterpriseOverview>("/api/enterprise/overview/");
+}
+
+export async function fetchProcurementWorkspace() {
+  return apiFetch<{ success: boolean } & ProcurementWorkspace>("/api/enterprise/procurement/");
+}
+
+export async function fetchInventoryWorkspace() {
+  return apiFetch<{ success: boolean } & InventoryWorkspace>("/api/enterprise/inventory/");
+}
+
+export async function fetchFinanceWorkspace() {
+  return apiFetch<{ success: boolean } & FinanceWorkspace>("/api/enterprise/finance/");
+}
+
+export async function fetchOrganizationWorkspace() {
+  return apiFetch<{ success: boolean } & OrganizationWorkspace>("/api/enterprise/organization/");
+}
+
+export async function updateOrganization(payload: { name?: string; legal_name?: string; timezone?: string; currency_code?: string }) {
+  return apiFetch<{ success: boolean; organization: OrganizationWorkspace["organization"] }>("/api/enterprise/organization/", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createDepartment(payload: { name: string; code?: string; description?: string }) {
+  return apiFetch<{ success: boolean; department: OrganizationWorkspace["departments"][number] }>("/api/enterprise/departments/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateDepartment(deptId: string, payload: { name?: string; code?: string; description?: string; is_active?: boolean }) {
+  return apiFetch<{ success: boolean; department: OrganizationWorkspace["departments"][number] }>(`/api/enterprise/departments/${deptId}/`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteDepartment(deptId: string) {
+  return apiFetch<{ success: boolean }>(`/api/enterprise/departments/${deptId}/`, { method: "DELETE" });
+}
+
+export async function createBranch(payload: { name: string; code?: string; city?: string; country?: string; address?: string }) {
+  return apiFetch<{ success: boolean; branch: OrganizationWorkspace["branches"][number] }>("/api/enterprise/branches/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateBranch(branchId: string, payload: { name?: string; code?: string; city?: string; country?: string; address?: string; is_active?: boolean }) {
+  return apiFetch<{ success: boolean; branch: OrganizationWorkspace["branches"][number] }>(`/api/enterprise/branches/${branchId}/`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteBranch(branchId: string) {
+  return apiFetch<{ success: boolean }>(`/api/enterprise/branches/${branchId}/`, { method: "DELETE" });
+}
+
+export async function fetchApprovalInbox(params?: URLSearchParams) {
+  const suffix = params?.toString() ? `?${params.toString()}` : "";
+  return apiFetch<{ success: boolean } & ApprovalInbox>(`/api/enterprise/approvals/inbox/${suffix}`);
+}
+
+export async function createProcurementRequest(payload: {
+  title: string;
+  justification?: string;
+  needed_by_date?: string | null;
+  department: string;
+  budget_account?: string | null;
+  lines: Array<{
+    product?: string | null;
+    description: string;
+    unit_of_measure?: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+}) {
+  return apiFetch<{ success: boolean; request: ProcurementWorkspace["requests"][number] }>("/api/enterprise/procurement/requests/", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateProcurementRequest(
+  requestId: string,
+  payload: {
+    title: string;
+    justification?: string;
+    needed_by_date?: string | null;
+    department: string;
+    budget_account?: string | null;
+    lines: Array<{
+      product?: string | null;
+      description: string;
+      unit_of_measure?: string;
+      quantity: number;
+      unit_price: number;
+    }>;
+  }
+) {
+  return apiFetch<{ success: boolean; request: ProcurementWorkspace["requests"][number] }>(`/api/enterprise/procurement/requests/${requestId}/`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function submitProcurementRequest(requestId: string) {
+  return apiFetch<{ success: boolean; request: ProcurementWorkspace["requests"][number]; message?: string }>(
+    `/api/enterprise/procurement/requests/${requestId}/submit/`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
+export async function approveEnterpriseProcurementRequest(requestId: string, comments = "") {
+  return apiFetch<{ success: boolean; request: ProcurementWorkspace["requests"][number]; message?: string }>(
+    `/api/enterprise/procurement/requests/${requestId}/approve/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ comments })
+    }
+  );
+}
+
+export async function rejectEnterpriseProcurementRequest(requestId: string, comments: string) {
+  return apiFetch<{ success: boolean; request: ProcurementWorkspace["requests"][number]; message?: string }>(
+    `/api/enterprise/procurement/requests/${requestId}/reject/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ comments })
+    }
+  );
+}
+
+export async function revertEnterpriseProcurementRequest(requestId: string, comments = "") {
+  return apiFetch<{ success: boolean; request: ProcurementWorkspace["requests"][number]; message?: string }>(
+    `/api/enterprise/procurement/requests/${requestId}/revert/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ comments })
+    }
+  );
+}
+
+export async function addEnterpriseProcurementApprovalComment(requestId: string, body: string) {
+  return apiFetch<{ success: boolean; request: ProcurementWorkspace["requests"][number]; message?: string }>(
+    `/api/enterprise/procurement/requests/${requestId}/comment/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ body })
+    }
+  );
+}
+
+export async function convertProcurementRequestToPurchaseOrder(
+  requestId: string,
+  payload: { vendor: string; warehouse: string; notes?: string }
+) {
+  return apiFetch<{ success: boolean; purchase_order: ProcurementWorkspace["purchase_orders"][number]; message?: string }>(
+    `/api/enterprise/procurement/requests/${requestId}/convert/`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function issueEnterprisePurchaseOrder(purchaseOrderId: string) {
+  return apiFetch<{ success: boolean; purchase_order: ProcurementWorkspace["purchase_orders"][number]; message?: string }>(
+    `/api/enterprise/purchase-orders/${purchaseOrderId}/issue/`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
+export async function receiveEnterprisePurchaseOrder(
+  purchaseOrderId: string,
+  payload: {
+    warehouse?: string | null;
+    notes?: string;
+    lines: Array<{ purchase_order_line: string; quantity_received: number }>;
+  }
+) {
+  return apiFetch<{ success: boolean; goods_receipt: InventoryWorkspace["receipts"][number]; message?: string }>(
+    `/api/enterprise/purchase-orders/${purchaseOrderId}/receive/`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function uploadEnterpriseProcurementAttachment(requestId: string, file: File, attachmentType: string) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("attachment_type", attachmentType);
+  return apiFetch<{ success: boolean; request: ProcurementWorkspace["requests"][number]; message?: string }>(
+    `/api/enterprise/procurement/requests/${requestId}/attachments/`,
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+}
+
+export async function uploadEnterpriseGoodsReceiptAttachment(receiptId: string, file: File, attachmentType: string) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("attachment_type", attachmentType);
+  return apiFetch<{ success: boolean; goods_receipt: InventoryWorkspace["receipts"][number]; message?: string }>(
+    `/api/enterprise/goods-receipts/${receiptId}/attachments/`,
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+}
+
+export async function postFinanceInvoice(invoiceId: string, payload: { amount?: number; invoice_date?: string }) {
+  return apiFetch<{ success: boolean; invoice: FinanceWorkspace["invoices"][number]; message?: string }>(
+    `/api/enterprise/invoices/${invoiceId}/post/`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function approveFinanceInvoice(invoiceId: string) {
+  return apiFetch<{ success: boolean; invoice: FinanceWorkspace["invoices"][number]; message?: string }>(
+    `/api/enterprise/invoices/${invoiceId}/approve/`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
+export async function revertFinanceInvoice(invoiceId: string, comments = "") {
+  return apiFetch<{ success: boolean; invoice: FinanceWorkspace["invoices"][number]; message?: string }>(
+    `/api/enterprise/invoices/${invoiceId}/revert/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ comments })
+    }
+  );
+}
+
+export async function addFinanceInvoiceApprovalComment(invoiceId: string, body: string) {
+  return apiFetch<{ success: boolean; invoice: FinanceWorkspace["invoices"][number]; message?: string }>(
+    `/api/enterprise/invoices/${invoiceId}/comment/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ body })
+    }
+  );
+}
+
+export async function createFinancePaymentRequest(invoiceId: string, payload: { amount?: number }) {
+  return apiFetch<{ success: boolean; payment_request: FinanceWorkspace["payment_requests"][number]; message?: string }>(
+    `/api/enterprise/invoices/${invoiceId}/create-payment-request/`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function uploadFinanceInvoiceAttachment(invoiceId: string, file: File, attachmentType: string) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("attachment_type", attachmentType);
+  return apiFetch<{ success: boolean; invoice: FinanceWorkspace["invoices"][number]; message?: string }>(
+    `/api/enterprise/invoices/${invoiceId}/attachments/`,
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+}
+
+export async function approveFinancePaymentRequest(paymentRequestId: string) {
+  return apiFetch<{ success: boolean; payment_request: FinanceWorkspace["payment_requests"][number]; message?: string }>(
+    `/api/enterprise/payment-requests/${paymentRequestId}/approve/`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
+export async function rejectFinancePaymentRequest(paymentRequestId: string, comments: string) {
+  return apiFetch<{ success: boolean; payment_request: FinanceWorkspace["payment_requests"][number]; message?: string }>(
+    `/api/enterprise/payment-requests/${paymentRequestId}/reject/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ comments })
+    }
+  );
+}
+
+export async function revertFinancePaymentRequest(paymentRequestId: string, comments = "") {
+  return apiFetch<{ success: boolean; payment_request: FinanceWorkspace["payment_requests"][number]; message?: string }>(
+    `/api/enterprise/payment-requests/${paymentRequestId}/revert/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ comments })
+    }
+  );
+}
+
+export async function addFinancePaymentApprovalComment(paymentRequestId: string, body: string) {
+  return apiFetch<{ success: boolean; payment_request: FinanceWorkspace["payment_requests"][number]; message?: string }>(
+    `/api/enterprise/payment-requests/${paymentRequestId}/comment/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ body })
+    }
+  );
+}
+
+export async function markFinancePaymentPaid(paymentRequestId: string, paymentReference: string) {
+  return apiFetch<{ success: boolean; payment_request: FinanceWorkspace["payment_requests"][number]; message?: string }>(
+    `/api/enterprise/payment-requests/${paymentRequestId}/mark-paid/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ payment_reference: paymentReference })
+    }
+  );
+}
+
+export async function uploadFinancePaymentRequestAttachment(paymentRequestId: string, file: File, attachmentType: string) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("attachment_type", attachmentType);
+  return apiFetch<{ success: boolean; payment_request: FinanceWorkspace["payment_requests"][number]; message?: string }>(
+    `/api/enterprise/payment-requests/${paymentRequestId}/attachments/`,
     {
       method: "POST",
       body: formData

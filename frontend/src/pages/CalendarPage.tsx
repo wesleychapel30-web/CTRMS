@@ -16,7 +16,16 @@ function getDateKey(value: Date | string) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function parseDateKey(dateKey: string | null, fallback: Date) {
+  if (!dateKey) {
+    return fallback;
+  }
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export function CalendarPage() {
+  const [viewMode, setViewMode] = useState<"month" | "week" | "day">("month");
   const [monthEvents, setMonthEvents] = useState<InvitationRecord[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<InvitationRecord[]>([]);
   const [next7Days, setNext7Days] = useState<InvitationRecord[]>([]);
@@ -90,10 +99,17 @@ export function CalendarPage() {
   }, [currentMonth, monthEvents]);
 
   const pendingInvitations = upcomingEvents.filter((item) => item.status === "pending_review").slice(0, 1);
+  const selectedDate = useMemo(() => parseDateKey(selectedDateKey, currentMonth), [currentMonth, selectedDateKey]);
   const selectedDayEvents = useMemo(
     () => (selectedDateKey ? monthEvents.filter((event) => getDateKey(event.event_date) === selectedDateKey) : []),
     [monthEvents, selectedDateKey]
   );
+  const weekDays = useMemo(() => {
+    const date = new Date(selectedDate);
+    const mondayOffset = (date.getDay() + 6) % 7;
+    const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - mondayOffset);
+    return Array.from({ length: 7 }, (_, index) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index));
+  }, [selectedDate]);
   const selectedDayLabel = useMemo(() => {
     if (!selectedDateKey) {
       return null;
@@ -108,32 +124,46 @@ export function CalendarPage() {
   }
 
   if (isLoading) {
-    return <StatePanel variant="loading" title="Loading calendar" message="Preparing monthly events, reminders, and upcoming engagements." />;
+    return <StatePanel variant="loading" title="Loading calendar" message="Loading events and reminders." />;
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
-      <section className="surface-panel rounded-xl p-6 sm:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <section className="surface-panel rounded-xl p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="section-kicker">Institutional Calendar</p>
-            <h2 className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em] text-[var(--ink)]">
-              Monthly Event View
+            <h2 className="headline-font text-2xl font-extrabold tracking-[-0.05em] text-[var(--ink)]">
+              Events
             </h2>
-            <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-              Operational view for invitations, accepted engagements, and upcoming attendance decisions.
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded-md bg-[var(--surface-low)] p-1">
-              <button type="button" className="interactive-press rounded-sm bg-[var(--surface-card)] px-4 py-2 text-xs font-semibold text-[var(--accent)]">
+              <button
+                type="button"
+                onClick={() => setViewMode("month")}
+                className={`interactive-press rounded-sm px-3 py-1.5 text-xs font-semibold ${
+                  viewMode === "month" ? "bg-[var(--surface-card)] text-[var(--accent)]" : "text-[var(--muted)]"
+                }`}
+              >
                 Month
               </button>
-              <button type="button" disabled className="interactive-press px-4 py-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-70">
+              <button
+                type="button"
+                onClick={() => setViewMode("week")}
+                className={`interactive-press rounded-sm px-3 py-1.5 text-xs font-semibold ${
+                  viewMode === "week" ? "bg-[var(--surface-card)] text-[var(--accent)]" : "text-[var(--muted)]"
+                }`}
+              >
                 Week
               </button>
-              <button type="button" disabled className="interactive-press px-4 py-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-70">
+              <button
+                type="button"
+                onClick={() => setViewMode("day")}
+                className={`interactive-press rounded-sm px-3 py-1.5 text-xs font-semibold ${
+                  viewMode === "day" ? "bg-[var(--surface-card)] text-[var(--accent)]" : "text-[var(--muted)]"
+                }`}
+              >
                 Day
               </button>
             </div>
@@ -142,17 +172,17 @@ export function CalendarPage() {
               <button
                 type="button"
                 onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                className="secondary-button interactive-press rounded-md p-2"
+                className="secondary-button interactive-press rounded-md p-1.5"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <div className="metric-strip page-enter rounded-md px-5 py-2.5 text-sm font-semibold text-[var(--ink)]" key={monthKey}>
+              <div className="metric-strip page-enter min-w-32 rounded-md px-3.5 py-2 text-center text-sm font-semibold text-[var(--ink)]" key={monthKey}>
                 {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
               </div>
               <button
                 type="button"
                 onClick={() => setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                className="secondary-button interactive-press rounded-md p-2"
+                className="secondary-button interactive-press rounded-md p-1.5"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -160,76 +190,169 @@ export function CalendarPage() {
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-7 border-b border-[var(--line)] pb-3 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-            <div key={day}>{day}</div>
-          ))}
-        </div>
+        {viewMode === "month" ? (
+          <>
+            <div className="mt-5 grid grid-cols-7 border-b border-[var(--line)] pb-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                <div key={day}>{day}</div>
+              ))}
+            </div>
 
-        <div key={monthKey} className="page-enter mt-4 grid grid-cols-7 overflow-hidden rounded-xl border border-[var(--line)]">
-          {monthCells.map((cell, index) => {
-            const isToday =
-              cell.day &&
-              currentMonth.getFullYear() === new Date().getFullYear() &&
-              currentMonth.getMonth() === new Date().getMonth() &&
-              cell.day === new Date().getDate();
-            const isSelected = Boolean(cell.dateKey && selectedDateKey === cell.dateKey);
+            <div key={monthKey} className="page-enter mt-3 grid grid-cols-7 overflow-hidden rounded-xl border border-[var(--line)]">
+              {monthCells.map((cell, index) => {
+                const isToday =
+                  cell.day &&
+                  currentMonth.getFullYear() === new Date().getFullYear() &&
+                  currentMonth.getMonth() === new Date().getMonth() &&
+                  cell.day === new Date().getDate();
+                const isSelected = Boolean(cell.dateKey && selectedDateKey === cell.dateKey);
 
-            return (
-              <div
-                key={`${cell.day ?? "blank"}-${index}`}
-                onClick={() => {
-                  if (cell.dateKey) {
-                    setSelectedDateKey(cell.dateKey);
-                  }
-                }}
-                className={`calendar-cell min-h-[8.2rem] border-b border-r border-[var(--line)] p-3 ${
-                  cell.day ? "bg-[var(--surface-card)]" : "bg-[var(--surface-low)]/70"
-                } ${isSelected ? "calendar-cell-active" : ""} ${cell.day ? "cursor-pointer" : ""} ${
-                  cell.dateKey ? "page-enter" : ""
-                }`}
-              >
-                {cell.day ? (
-                  <div className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${isToday ? "bg-[var(--accent)] text-white" : "text-[var(--ink)]"}`}>
-                    {cell.day}
-                  </div>
-                ) : null}
-
-                <div className="mt-3 space-y-2">
-                  {cell.events.length ? (
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
-                      {cell.events.length} event{cell.events.length === 1 ? "" : "s"}
-                    </p>
-                  ) : null}
-                  {cell.events.slice(0, 2).map((event) => (
-                    <button
-                      key={event.id}
-                      type="button"
-                      onClick={(eventClick) => {
-                        eventClick.stopPropagation();
+                return (
+                  <div
+                    key={`${cell.day ?? "blank"}-${index}`}
+                    onClick={() => {
+                      if (cell.dateKey) {
                         setSelectedDateKey(cell.dateKey);
-                        setSelected(event);
-                      }}
-                      className={`interactive-lift interactive-press block w-full truncate rounded-sm px-2 py-1 text-left text-[10px] font-bold uppercase tracking-[0.08em] ${
-                        event.status === "declined"
-                          ? "bg-[#fe8983]/20 text-[#752121]"
-                          : event.status === "accepted" || event.status === "confirmed_attendance"
-                            ? "bg-[var(--accent-soft)] text-[var(--accent-dim)]"
-                            : "bg-[var(--surface-low)] text-[var(--ink)]"
-                      }`}
-                    >
-                      {event.event_title}
-                    </button>
-                  ))}
+                      }
+                    }}
+                    className={`calendar-cell min-h-[4.75rem] border-b border-r border-[var(--line)] p-2 md:min-h-[5.4rem] ${
+                      cell.day ? "bg-[var(--surface-card)]" : "bg-[var(--surface-low)]/70"
+                    } ${isSelected ? "calendar-cell-active" : ""} ${cell.day ? "cursor-pointer" : ""} ${
+                      cell.dateKey ? "page-enter" : ""
+                    }`}
+                  >
+                    {cell.day ? (
+                      <div className={`inline-flex min-w-6 justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold ${isToday ? "bg-[var(--accent)] text-white" : "text-[var(--ink)]"}`}>
+                        {cell.day}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-2 space-y-1">
+                      {cell.events.length ? (
+                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">
+                          {cell.events.length} event{cell.events.length === 1 ? "" : "s"}
+                        </p>
+                      ) : null}
+                      {cell.events.slice(0, 1).map((event) => (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={(eventClick) => {
+                            eventClick.stopPropagation();
+                            setSelectedDateKey(cell.dateKey);
+                            setSelected(event);
+                          }}
+                          className={`interactive-lift interactive-press block w-full truncate rounded-sm px-1.5 py-0.5 text-left text-[9px] font-bold uppercase tracking-[0.06em] transition-colors ${
+                            event.status === "declined"
+                              ? "bg-[var(--status-danger-bg)] text-[var(--status-danger-text)]"
+                              : event.status === "accepted" || event.status === "confirmed_attendance"
+                                ? "bg-[var(--status-accent-bg)] text-[var(--status-accent-text)]"
+                                : "bg-[var(--surface-low)] text-[var(--ink)]"
+                          }`}
+                        >
+                          {event.event_title}
+                        </button>
+                      ))}
+                      {cell.events.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={(eventClick) => {
+                            eventClick.stopPropagation();
+                            setSelectedDateKey(cell.dateKey);
+                          }}
+                          className="text-[9px] font-semibold text-[var(--accent)]"
+                        >
+                          +{cell.events.length - 1} more
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
+
+        {viewMode === "week" ? (
+          <div className="page-enter mt-5 grid gap-3 md:grid-cols-7">
+            {weekDays.map((day) => {
+              const dateKey = getDateKey(day);
+              const dayEvents = monthEvents.filter((event) => getDateKey(event.event_date) === dateKey);
+              const isSelected = selectedDateKey === dateKey;
+              return (
+                <div
+                  key={dateKey}
+                  onClick={() => setSelectedDateKey(dateKey)}
+                  className={`rounded-xl border border-[var(--line)] p-3 ${isSelected ? "calendar-cell-active" : "bg-[var(--surface-card)]"} cursor-pointer`}
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
+                    {day.toLocaleDateString("en-US", { weekday: "short" })}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-[var(--ink)]">
+                    {day.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {dayEvents.length ? (
+                      dayEvents.map((event) => (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={(eventClick) => {
+                            eventClick.stopPropagation();
+                            setSelectedDateKey(dateKey);
+                            setSelected(event);
+                          }}
+                          className="interactive-lift interactive-press block w-full rounded-md bg-[var(--surface-low)] px-2.5 py-2 text-left text-xs font-semibold text-[var(--ink)]"
+                        >
+                          <span className="block truncate">{event.event_title}</span>
+                          <span className="mt-1 block text-[10px] font-medium text-[var(--muted)]">{formatDateTime(event.event_date)}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-xs text-[var(--muted)]">No scheduled events.</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {viewMode === "day" ? (
+          <div className="page-enter mt-5 rounded-xl border border-[var(--line)] bg-[var(--surface-card)] p-4">
+            <p className="section-kicker">Day Schedule</p>
+            <h3 className="headline-font mt-2 text-xl font-bold tracking-[-0.04em] text-[var(--ink)]">
+              {selectedDayLabel ?? formatDate(selectedDate.toISOString())}
+            </h3>
+            <div className="mt-4 space-y-2">
+              {selectedDayEvents.length ? (
+                selectedDayEvents.map((event) => (
+                  <button
+                    key={event.id}
+                    type="button"
+                    onClick={() => setSelected(event)}
+                    className="interactive-lift interactive-press block w-full rounded-xl bg-[var(--surface-low)] px-3 py-3 text-left"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--ink)]">{event.event_title}</p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(event.event_date)}</p>
+                      </div>
+                      <StatusBadge status={event.status_display} />
+                    </div>
+                    <p className="mt-2 text-xs text-[var(--muted)]">{event.location}</p>
+                  </button>
+                ))
+              ) : (
+                <p className="text-sm text-[var(--muted)]">No scheduled invitations for the selected day.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      <aside className="space-y-6">
-        <section className="surface-panel interactive-lift rounded-xl p-6">
+      <aside className="space-y-4">
+        <section className="surface-panel interactive-lift rounded-xl p-4">
           <p className="section-kicker">Selected Day</p>
           <p className="mt-2 text-sm font-semibold text-[var(--ink)]">{selectedDayLabel ?? "Choose a day"}</p>
           <p className="mt-1 text-xs text-[var(--muted)]">
@@ -238,14 +361,14 @@ export function CalendarPage() {
               : "No scheduled invitations for this date."}
           </p>
 
-          <div className="mt-5 space-y-3">
+          <div className="mt-4 space-y-2">
             {selectedDayEvents.length ? (
               selectedDayEvents.map((event) => (
                 <button
                   key={event.id}
                   type="button"
                   onClick={() => setSelected(event)}
-                  className="interactive-lift interactive-press block w-full rounded-xl bg-[var(--surface-low)] px-4 py-4 text-left"
+                  className="interactive-lift interactive-press block w-full rounded-lg bg-[var(--surface-low)] px-3 py-3 text-left"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -258,14 +381,14 @@ export function CalendarPage() {
                 </button>
               ))
             ) : (
-              <div className="rounded-xl bg-[var(--surface-low)] px-4 py-4 text-sm text-[var(--muted)]">
+              <div className="rounded-lg bg-[var(--surface-low)] px-3 py-3 text-sm text-[var(--muted)]">
                 Select another date or move to a different month to explore scheduled invitations.
               </div>
             )}
           </div>
         </section>
 
-        <section className="surface-panel rounded-xl p-6">
+        <section className="surface-panel rounded-xl p-4">
           <p className="section-kicker">Upcoming in 7 Days</p>
           <p className="mt-2 text-sm font-semibold text-[var(--ink)]">
             {next7Days.length
@@ -273,14 +396,14 @@ export function CalendarPage() {
               : "No events scheduled"}
           </p>
 
-          <div className="mt-6 space-y-3">
+          <div className="mt-4 space-y-2">
             {next7Days.length ? (
               next7Days.map((event) => (
                 <button
                   key={event.id}
                   type="button"
                   onClick={() => setSelected(event)}
-                  className="interactive-lift interactive-press block w-full rounded-xl bg-[var(--surface-low)] px-4 py-4 text-left"
+                  className="interactive-lift interactive-press block w-full rounded-lg bg-[var(--surface-low)] px-3 py-3 text-left"
                 >
                   <p className="text-sm font-semibold text-[var(--ink)]">{event.event_title}</p>
                   <p className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(event.event_date)}</p>
@@ -293,12 +416,12 @@ export function CalendarPage() {
           </div>
         </section>
 
-        <section className="surface-panel rounded-xl p-6">
+        <section className="surface-panel rounded-xl p-4">
           <p className="section-kicker">Pending Invitations</p>
-          <div className="mt-5 space-y-4">
+          <div className="mt-4 space-y-3">
             {pendingInvitations.length ? (
               pendingInvitations.map((event) => (
-                <div key={event.id} className="interactive-lift rounded-xl bg-[var(--surface-low)] p-4">
+                <div key={event.id} className="interactive-lift rounded-lg bg-[var(--surface-low)] p-3">
                   <p className="text-sm font-semibold text-[var(--ink)]">{event.event_title}</p>
                   <p className="mt-2 text-xs text-[var(--muted)]">{event.contact_person || event.inviting_organization}</p>
                   <p className="mt-1 text-xs text-[var(--muted)]">{event.location}</p>
@@ -317,7 +440,7 @@ export function CalendarPage() {
             )}
           </div>
 
-          <Link to="/invitations" className="primary-button interactive-press mt-8 inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold">
+          <Link to="/invitations" className="primary-button interactive-press mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold">
             <Plus className="h-4 w-4" />
             Open Invitations
           </Link>

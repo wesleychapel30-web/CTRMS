@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { ChartDatum, TimelineItem } from "../types";
 
-export function DonutChart({ data }: { data: ChartDatum[] }) {
+export function DonutChart({ data, centerLabel = "Requests" }: { data: ChartDatum[]; centerLabel?: string }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
   const safeTotal = total || 1;
   const stops = data
@@ -11,7 +11,7 @@ export function DonutChart({ data }: { data: ChartDatum[] }) {
       acc.push({
         start: previous,
         end: previous + ratio * 100,
-        color: data[index].color ?? "#2563eb"
+        color: data[index].color ?? "var(--accent)"
       });
       return acc;
     }, []);
@@ -27,7 +27,7 @@ export function DonutChart({ data }: { data: ChartDatum[] }) {
         <div className="absolute inset-0 grid place-items-center">
           <div className="text-center">
             <div className="headline-font text-2xl font-extrabold text-[var(--ink)]">{total}</div>
-            <div className="text-xs font-medium text-[var(--muted)]">Requests</div>
+            <div className="text-xs font-medium text-[var(--muted)]">{centerLabel}</div>
           </div>
         </div>
       </div>
@@ -84,7 +84,7 @@ export function LineChart({ data }: { data: ChartDatum[] }) {
   );
 }
 
-export function BarChart({ data }: { data: ChartDatum[] }) {
+export function BarChart({ data, valueSuffix = "%" }: { data: ChartDatum[]; valueSuffix?: string }) {
   const max = Math.max(...data.map((item) => item.value), 1);
   return (
     <div className="space-y-4">
@@ -92,7 +92,10 @@ export function BarChart({ data }: { data: ChartDatum[] }) {
         <div key={item.label} className="chart-legend-item space-y-2" style={{ animationDelay: `${120 + index * 70}ms` }}>
           <div className="flex items-center justify-between text-sm">
             <span className="text-[var(--muted)]">{item.label}</span>
-            <span className="font-semibold text-[var(--ink)]">{item.value}%</span>
+            <span className="font-semibold text-[var(--ink)]">
+              {item.value}
+              {valueSuffix}
+            </span>
           </div>
           <div className="chart-figure chart-bar-track h-3 rounded-full bg-[var(--surface-container)]">
             <div
@@ -110,7 +113,7 @@ export function BarChart({ data }: { data: ChartDatum[] }) {
   );
 }
 
-export function Timeline({ items }: { items: TimelineItem[] }) {
+export function Timeline({ items, compact = false }: { items: TimelineItem[]; compact?: boolean }) {
   const toneClass = {
     accent: "bg-blue-500",
     success: "bg-emerald-500",
@@ -119,18 +122,28 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
   };
 
   return (
-    <div className="space-y-4">
-      {items.map((item) => (
-        <div key={`${item.title}-${item.date}`} className="chart-legend-item flex gap-4">
+    <div className={compact ? "max-h-[26rem] space-y-2 overflow-y-auto pr-1" : "space-y-4"}>
+      {items.map((item, index) => (
+        <div key={`${item.title}-${item.date}-${index}`} className={`chart-legend-item flex ${compact ? "gap-3" : "gap-4"}`}>
           <div className="flex flex-col items-center">
-            <span className={`mt-1 h-3.5 w-3.5 rounded-full ${toneClass[item.tone]}`} />
-            <span className="mt-2 h-full w-px bg-[var(--surface-container)]" />
+            <span className={`${compact ? "mt-1 h-2.5 w-2.5" : "mt-1 h-3.5 w-3.5"} rounded-full ${toneClass[item.tone]}`} />
+            {index < items.length - 1 ? <span className={`${compact ? "mt-1.5" : "mt-2"} h-full w-px bg-[var(--surface-container)]`} /> : null}
           </div>
-          <div className="pb-5">
-            <p className="font-semibold text-[var(--ink)]">{item.title}</p>
-            <p className="text-sm text-[var(--muted)]">{item.subtitle}</p>
-            <p className="mt-1 text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]/80">{item.date}</p>
-          </div>
+          {compact ? (
+            <div className="min-w-0 flex-1 rounded-lg border border-[var(--surface-container)] bg-[var(--surface-low)] px-3 py-2.5">
+              <div className="flex items-start justify-between gap-3">
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">{item.title}</p>
+                <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]/80">{item.date}</p>
+              </div>
+              <p className="mt-1 text-sm leading-snug text-[var(--muted)]">{item.subtitle}</p>
+            </div>
+          ) : (
+            <div className="pb-5">
+              <p className="font-semibold text-[var(--ink)]">{item.title}</p>
+              <p className="text-sm text-[var(--muted)]">{item.subtitle}</p>
+              <p className="mt-1 text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]/80">{item.date}</p>
+            </div>
+          )}
         </div>
       ))}
     </div>

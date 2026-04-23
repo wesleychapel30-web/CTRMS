@@ -56,6 +56,7 @@ export function ToastMessage({ toast, onDismiss }: ToastMessageProps) {
 
   return (
     <div
+      data-testid={`toast-${toast.variant}`}
       className={`pointer-events-auto rounded-2xl border px-4 py-3 shadow-lg shadow-slate-900/10 transition-all duration-200 ${
         toast.isClosing ? "toast-exit" : "toast-enter"
       } ${meta.shell}`}

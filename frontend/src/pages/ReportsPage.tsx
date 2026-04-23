@@ -65,31 +65,30 @@ export function ReportsPage() {
   }
 
   if (isLoading && !report) {
-    return <StatePanel variant="loading" title="Loading reports" message="Preparing operational and financial reporting." />;
+    return <StatePanel variant="loading" title="Loading reports" message="Loading report data." />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <SectionCard
         title="Reports"
-        subtitle="Operational and financial reporting."
         action={
           canExport ? (
             <div className="flex gap-2">
-              <a href={excelExportUrl} className="inline-flex items-center gap-2 rounded-sm bg-[var(--surface-low)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">
-                <Download className="h-4 w-4" />
+              <a href={excelExportUrl} className="inline-flex items-center gap-2 rounded-sm bg-[var(--surface-low)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]">
+                <Download className="h-3.5 w-3.5" />
                 Export Excel
               </a>
-              <a href={pdfExportUrl} className="primary-button inline-flex items-center gap-2 rounded-sm px-4 py-2 text-sm font-semibold">
-                <Download className="h-4 w-4" />
+              <a href={pdfExportUrl} className="primary-button inline-flex items-center gap-2 rounded-sm px-3 py-1.5 text-xs font-semibold">
+                <Download className="h-3.5 w-3.5" />
                 Export PDF
               </a>
             </div>
           ) : null
         }
       >
-        {error ? <InlineBanner variant="warning" title="Report refresh issue" message={error} className="mb-5" /> : null}
-        <FilterBar className="mb-5 rounded-lg bg-[var(--surface-low)] p-5">
+        {error ? <InlineBanner variant="warning" title="Report refresh issue" message={error} className="mb-3" /> : null}
+        <FilterBar className="mb-3 rounded-lg bg-[var(--surface-low)] p-3">
           <label className="grid gap-2 text-sm">
             <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">From</span>
             <input value={fromDate} onChange={(event) => setFromDate(event.target.value)} type="date" className="institutional-input rounded-sm px-3 py-2.5 outline-none" />
@@ -141,7 +140,7 @@ export function ReportsPage() {
         ) : null}
       </SectionCard>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <SectionCard title="Request Trend">
           <LineChart data={trendData.length ? trendData : [{ label: "N/A", value: 0 }]} />
         </SectionCard>
@@ -153,10 +152,10 @@ export function ReportsPage() {
       <SectionCard title="Category Summary">
         <div className="grid gap-3 md:grid-cols-2">
           {categorySummary.map(([label, value]) => (
-            <div key={label} className="rounded-lg bg-[var(--surface-low)] px-4 py-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
-              <p className="headline-font mt-2 text-lg font-bold text-[var(--ink)]">{value.count} requests</p>
-              <p className="mt-1 text-sm font-medium text-[var(--muted)]">{formatCurrency(value.total_amount)}</p>
+            <div key={label} className="rounded-lg bg-[var(--surface-low)] px-3 py-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
+              <p className="headline-font mt-1.5 text-sm font-bold text-[var(--ink)]">{value.count} requests</p>
+              <p className="mt-0.5 text-xs font-medium text-[var(--muted)]">{formatCurrency(value.total_amount)}</p>
             </div>
           ))}
           {!categorySummary.length ? <p className="text-sm text-[var(--muted)]">No category data available for the selected filters.</p> : null}

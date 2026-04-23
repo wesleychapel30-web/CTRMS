@@ -38,12 +38,10 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
   const roleSet = useMemo(() => new Set([...(user?.roles ?? []), user?.role].filter(Boolean)), [user?.roles, user?.role]);
 
   const canGlobalSearch = permissionSet.has("search:global");
-  const canCreateRequest = permissionSet.has("request:create");
-
   const visibleNavItems = useMemo(
     () =>
       navItems.filter((item) => {
-        if (item.href === "/activity" && !(roleSet.has("admin") || roleSet.has("director"))) {
+        if (item.href === "/activity" && !(roleSet.has("admin") || roleSet.has("director") || roleSet.has("super_admin"))) {
           return false;
         }
         if (!item.requires?.length) {
@@ -170,7 +168,6 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
             setSearchResults([]);
             navigate(href);
           }}
-          canCreateRequest={canCreateRequest}
           notificationsOpen={isNotificationsOpen}
           onToggleNotifications={() => setIsNotificationsOpen((current) => !current)}
           onCloseNotifications={() => setIsNotificationsOpen(false)}
@@ -181,11 +178,11 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
           onNotificationClick={handleNotificationClick}
         />
 
-        <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-8">
+        <main className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 md:px-8 lg:px-10">
           {rightPanel ? (
-            <div key={location.pathname} className="page-enter grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div key={location.pathname} className="page-enter grid gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
               <div>{children}</div>
-              <aside className="surface-panel sticky top-[5.75rem] h-[calc(100vh-7.25rem)] overflow-y-auto rounded-xl p-5">
+              <aside className="surface-panel sticky top-[4.5rem] h-[calc(100vh-5.5rem)] overflow-y-auto rounded-xl p-4">
                 {rightPanel}
               </aside>
             </div>

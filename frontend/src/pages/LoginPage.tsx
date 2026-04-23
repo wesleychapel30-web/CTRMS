@@ -77,50 +77,46 @@ export function LoginPage() {
     <AuthLayout
       branding={branding}
       title="Sign In"
-      subtitle="Use your account credentials to continue."
     >
       <div className="auth-form-shell relative">
-        <form onSubmit={handleSubmit} className={`space-y-5 ${authPhase === "success" ? "auth-form-shell-success" : ""}`}>
-          <label className="grid gap-2">
-            <span className="section-kicker">Email or terminal ID</span>
+        <form onSubmit={handleSubmit} className={`space-y-2.5 ${authPhase === "success" ? "auth-form-shell-success" : ""}`}>
+          <label className="grid gap-1">
+            <span className="text-[9px] font-bold uppercase tracking-[0.24em] text-white/70">Username or email</span>
             <input
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               disabled={authPhase === "success"}
-              className="institutional-input w-full rounded-md px-4 py-3.5 text-[var(--ink)] outline-none disabled:cursor-not-allowed disabled:opacity-70"
-              placeholder="name@organization.com"
+              className="auth-input w-full rounded-md px-3 py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-70"
+              placeholder="Username or email"
             />
           </label>
 
-          <label className="grid gap-2">
-            <div className="flex items-center justify-between gap-3">
-              <span className="section-kicker">Password</span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Protected access</span>
-            </div>
+          <label className="grid gap-1">
+            <span className="text-[9px] font-bold uppercase tracking-[0.24em] text-white/70">Password</span>
             <input
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               disabled={authPhase === "success"}
-              className="institutional-input w-full rounded-md px-4 py-3.5 text-[var(--ink)] outline-none disabled:cursor-not-allowed disabled:opacity-70"
+              className="auth-input w-full rounded-md px-3 py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-70"
               placeholder="Enter your password"
               type="password"
             />
           </label>
 
-          <label className="flex items-center gap-3 text-sm text-[var(--muted)]">
-            <input type="checkbox" disabled={authPhase === "success"} className="rounded border-[var(--line)]" />
-            <span>Remember this device for 24 hours</span>
+          <label className="flex items-center gap-2 text-[11px] font-medium text-white/78">
+            <input type="checkbox" disabled={authPhase === "success"} className="h-3 w-3 rounded border-white/45 bg-white/12 accent-white" />
+            <span>Remember for 24 hours</span>
           </label>
 
           {error ? <InlineBanner variant="error" title="Sign-in failed" message={error} /> : null}
 
           <button
             disabled={isSubmitting || authPhase === "success"}
-            className="primary-button inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3.5 text-sm font-semibold shadow-sm disabled:opacity-60"
+            className="auth-submit-button inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-bold shadow-sm disabled:opacity-60"
           >
             {authPhase === "success" ? <ShieldCheck className="h-4 w-4" /> : null}
             {authPhase === "submitting" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-            {authPhase === "success" ? "Access Granted" : authPhase === "submitting" ? "Authorizing..." : "Authorize Access"}
+            {authPhase === "success" ? "Signed In" : authPhase === "submitting" ? "Signing in..." : "Sign In"}
           </button>
         </form>
 
@@ -132,8 +128,8 @@ export function LoginPage() {
               <div className="auth-success-icon">
                 <ShieldCheck className="h-6 w-6" />
               </div>
-              <p className="headline-font text-2xl font-extrabold tracking-[-0.05em] text-[var(--ink)]">Access granted</p>
-              <p className="mt-2 text-sm text-[var(--muted)]">Preparing your workspace and loading permissions.</p>
+              <p className="headline-font text-2xl font-extrabold tracking-[-0.05em] text-[var(--ink)]">Signed in</p>
+              <p className="mt-2 text-sm text-[var(--muted)]">Loading your dashboard.</p>
             </div>
           </div>
         ) : null}

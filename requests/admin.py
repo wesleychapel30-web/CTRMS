@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.utils.html import format_html
 from .models import Request, RequestDocument, RequestHistory
@@ -80,7 +81,7 @@ class RequestAdmin(admin.ModelAdmin):
         """Set reviewed_by and reviewed_at when status changes to approved/rejected"""
         if change and obj.status in ['approved', 'rejected'] and not obj.reviewed_by:
             obj.reviewed_by = request.user
-            obj.reviewed_at = __import__('django.utils.timezone', fromlist=['now']).now()
+            obj.reviewed_at = timezone.now()
         super().save_model(request, obj, form, change)
 
 

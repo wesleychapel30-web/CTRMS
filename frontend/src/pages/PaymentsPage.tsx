@@ -11,6 +11,7 @@ import { getPaymentLifecycleState, getRequestActionVisibility } from "../lib/wor
 import type { RequestRecord } from "../types";
 
 type PaymentFilter = "all" | "paid" | "partial" | "pending";
+type PaymentSort = "recent" | "approved_desc" | "disbursed_desc" | "balance_desc";
 
 function getErrorMessage(reason: unknown) {
   return reason instanceof Error ? reason.message : "Unable to load payments";
@@ -22,6 +23,11 @@ export function PaymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<PaymentFilter>("all");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [sortMode, setSortMode] = useState<PaymentSort>("recent");
   const canView = hasAnyPermission(["payment:view", "payment:record"]);
 
   useEffect(() => {
@@ -32,7 +38,9 @@ export function PaymentsPage() {
     setIsLoading(true);
     fetchRequests()
       .then((response) => {
-        setRows(response.results.filter((item) => ["approved", "partially_paid", "paid"].includes(item.status)));
+        setRows(response.results.filter((item) =>
+          ["director_approved", "finance_processing", "finance_query", "pending_payment", "approved", "partially_paid", "paid"].includes(item.status)
+        ));
         setError(null);
       })
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
@@ -40,21 +48,72 @@ export function PaymentsPage() {
   }, [canView]);
 
   const filteredRows = useMemo(() => {
-    if (activeFilter === "paid") {
-      return rows.filter((item) => item.status === "paid");
-    }
-    if (activeFilter === "partial") {
-      return rows.filter((item) => item.status === "partially_paid");
-    }
-    if (activeFilter === "pending") {
-      return rows.filter((item) => item.status === "approved");
-    }
-    return rows;
-  }, [activeFilter, rows]);
+    let nextRows = rows.filter((item) => {
+      if (activeFilter === "paid" && item.status !== "paid") {
+        return false;
+      }
+      if (activeFilter === "partial" && item.status !== "partially_paid") {
+        return false;
+      }
+      if (activeFilter === "pending" && !["director_approved", "finance_processing", "finance_query", "pending_payment", "approved"].includes(item.status)) {
+        return false;
+      }
+      if (categoryFilter !== "all" && item.category !== categoryFilter) {
+        return false;
+      }
+      const referenceDate = (item.payment_date || item.reviewed_at || item.created_at).slice(0, 10);
+      if (fromDate && referenceDate < fromDate) {
+        return false;
+      }
+      if (toDate && referenceDate > toDate) {
+        return false;
+      }
+      return true;
+    });
+
+    nextRows = [...nextRows].sort((left, right) => {
+      if (sortMode === "approved_desc") {
+        return Number(right.approved_amount ?? 0) - Number(left.approved_amount ?? 0);
+      }
+      if (sortMode === "disbursed_desc") {
+        return Number(right.disbursed_amount ?? 0) - Number(left.disbursed_amount ?? 0);
+      }
+      if (sortMode === "balance_desc") {
+        return Number(right.remaining_balance ?? 0) - Number(left.remaining_balance ?? 0);
+      }
+      const leftDate = new Date(left.payment_date || left.reviewed_at || left.created_at).getTime();
+      const rightDate = new Date(right.payment_date || right.reviewed_at || right.created_at).getTime();
+      return rightDate - leftDate;
+    });
+
+    return nextRows;
+  }, [activeFilter, categoryFilter, fromDate, rows, sortMode, toDate]);
+
+  const categoryOptions = useMemo(
+    () => Array.from(new Set(rows.map((item) => item.category).filter(Boolean))).sort(),
+    [rows]
+  );
+  const sortLabel =
+    sortMode === "approved_desc"
+      ? "Approved Amount"
+      : sortMode === "disbursed_desc"
+        ? "Paid to Date"
+        : sortMode === "balance_desc"
+          ? "Remaining Balance"
+          : "Latest Activity";
+
+  const cycleSortMode = () => {
+    setSortMode((current) => {
+      if (current === "recent") return "approved_desc";
+      if (current === "approved_desc") return "disbursed_desc";
+      if (current === "disbursed_desc") return "balance_desc";
+      return "recent";
+    });
+  };
 
   const totalDisbursed = rows.reduce((sum, item) => sum + Number(item.disbursed_amount ?? 0), 0);
   const pendingSettlements = rows
-    .filter((item) => item.status === "approved")
+    .filter((item) => ["director_approved", "finance_processing", "finance_query", "pending_payment", "approved"].includes(item.status))
     .reduce((sum, item) => sum + Math.max(Number(item.approved_amount ?? 0) - Number(item.disbursed_amount ?? 0), 0), 0);
   const averageProcessingDays = rows.length
     ? (
@@ -77,61 +136,54 @@ export function PaymentsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="section-kicker">Payments & Disbursement</p>
-            <h2 className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em] text-[var(--ink)]">
-              Institutional financial tracking
-            </h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--muted)]">
-              Monitor approved disbursements, settlement progress, and outstanding payment balances tied to request approvals.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Link to="/reports" className="secondary-button inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold">
-              <Download className="h-4 w-4" />
+    <div className="space-y-4">
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="headline-font text-xl font-extrabold tracking-[-0.04em] text-[var(--ink)]">
+            Payments
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/reports" className="secondary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold">
+              <Download className="h-3.5 w-3.5" />
               Export Ledger
             </Link>
-            <Link to="/requests" className="primary-button inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold">
+            <Link to="/requests" className="primary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold">
               Record Payment
             </Link>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="surface-panel rounded-xl px-6 py-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="item-enter item-enter-1 surface-panel rounded-xl px-4 py-3">
             <p className="section-kicker">Total Disbursed</p>
-            <p className="headline-font mt-3 text-3xl font-extrabold tracking-[-0.05em]">{formatCurrency(totalDisbursed)}</p>
-            <p className="mt-2 text-xs font-semibold text-[var(--success)]">Approved payments processed</p>
+            <p className="headline-font mt-2 text-2xl font-extrabold tracking-[-0.05em]">{formatCurrency(totalDisbursed)}</p>
+            <p className="mt-1 text-xs font-semibold text-[var(--success)]">Approved payments processed</p>
           </div>
-          <div className="surface-panel rounded-xl px-6 py-5">
+          <div className="item-enter item-enter-2 surface-panel rounded-xl px-4 py-3">
             <p className="section-kicker">Pending Settlements</p>
-            <p className="headline-font mt-3 text-3xl font-extrabold tracking-[-0.05em]">{formatCurrency(pendingSettlements)}</p>
-            <p className="mt-2 text-xs font-semibold text-[var(--muted)]">
+            <p className="headline-font mt-2 text-2xl font-extrabold tracking-[-0.05em]">{formatCurrency(pendingSettlements)}</p>
+            <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
               {rows.filter((item) => item.status === "approved").length} requests awaiting entry
             </p>
           </div>
-          <div className="surface-panel rounded-xl px-6 py-5">
+          <div className="item-enter item-enter-3 surface-panel rounded-xl px-4 py-3">
             <p className="section-kicker">Avg. Processing Time</p>
-            <p className="headline-font mt-3 text-3xl font-extrabold tracking-[-0.05em]">{averageProcessingDays} days</p>
-            <p className="mt-2 text-xs font-semibold text-[var(--danger)]">Measured from approval to payment date</p>
+            <p className="headline-font mt-2 text-2xl font-extrabold tracking-[-0.05em]">{averageProcessingDays} days</p>
+            <p className="mt-1 text-xs font-semibold text-[var(--danger)]">Measured from approval to payment date</p>
           </div>
-          <div className="surface-panel rounded-xl px-6 py-5">
+          <div className="item-enter item-enter-4 surface-panel rounded-xl px-4 py-3">
             <p className="section-kicker">Capital Reserve</p>
-            <p className="headline-font mt-3 text-3xl font-extrabold tracking-[-0.05em]">{capitalReserve}%</p>
-            <div className="mt-3 h-2 rounded-full bg-[var(--surface-container)]">
-              <div className="h-2 rounded-full bg-[var(--accent)]" style={{ width: `${capitalReserve}%` }} />
+            <p className="headline-font mt-2 text-2xl font-extrabold tracking-[-0.05em]">{capitalReserve}%</p>
+            <div className="mt-2 h-1.5 rounded-full bg-[var(--surface-container)]">
+              <div className="h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${capitalReserve}%` }} />
             </div>
           </div>
         </div>
       </section>
 
       <section className="surface-panel overflow-hidden rounded-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-low)] px-6 py-4">
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--surface-low)] px-4 py-3">
+          <div className="flex flex-wrap gap-1.5">
             {[
               { key: "all", label: "All Disbursements" },
               { key: "pending", label: "Pending Entry" },
@@ -142,7 +194,7 @@ export function PaymentsPage() {
                 key={item.key}
                 type="button"
                 onClick={() => setActiveFilter(item.key as PaymentFilter)}
-                className={`rounded-sm px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] ${
+                className={`rounded-sm px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] ${
                   activeFilter === item.key
                     ? "bg-[var(--surface-card)] text-[var(--accent)] shadow-sm"
                     : "text-[var(--muted)]"
@@ -153,16 +205,54 @@ export function PaymentsPage() {
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="secondary-button inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold">
-              <Filter className="h-4 w-4" />
-              Filter
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters((current) => !current)}
+              className="secondary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              {showAdvancedFilters ? "Hide Filters" : "Filter"}
             </button>
-            <button type="button" className="secondary-button inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold">
-              <SlidersHorizontal className="h-4 w-4" />
-              Sort
+            <button
+              type="button"
+              onClick={cycleSortMode}
+              className="secondary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Sort: {sortLabel}
             </button>
           </div>
         </div>
+
+        {showAdvancedFilters ? (
+          <div className="grid gap-2 border-t border-[var(--line)] bg-[var(--surface-card)] px-4 py-3 md:grid-cols-4">
+            <select
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              className="institutional-input rounded-md px-3 py-2 text-sm outline-none"
+            >
+              <option value="all">All categories</option>
+              {categoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+            <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="institutional-input rounded-md px-3 py-2 text-sm outline-none" />
+            <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="institutional-input rounded-md px-3 py-2 text-sm outline-none" />
+            <button
+              type="button"
+              onClick={() => {
+                setCategoryFilter("all");
+                setFromDate("");
+                setToDate("");
+              }}
+              className="secondary-button rounded-md px-3 py-2 text-xs font-semibold"
+            >
+              Clear Filters
+            </button>
+          </div>
+        ) : null}
 
         {error ? <InlineBanner variant="error" title="Payments unavailable" message={error} className="mx-6 mt-5" /> : null}
 
@@ -204,6 +294,7 @@ export function PaymentsPage() {
             }
           ]}
           rows={filteredRows}
+          density="compact"
           isLoading={isLoading}
           loadingMessage="Loading payment records..."
           emptyMessage="No payment records available for this view."
@@ -217,8 +308,8 @@ export function PaymentsPage() {
             <div className="h-3 overflow-hidden rounded-full bg-[var(--surface-container)]">
               <div className="flex h-full w-full">
                 <span className="h-full bg-[var(--accent)]" style={{ width: "45%" }} />
-                <span className="h-full bg-[#8fa1bd]" style={{ width: "30%" }} />
-                <span className="h-full bg-[#b4c3db]" style={{ width: "25%" }} />
+                <span className="h-full bg-[var(--accent-dim)]" style={{ width: "30%" }} />
+                <span className="h-full bg-[var(--surface-highest)]" style={{ width: "25%" }} />
               </div>
             </div>
             <div className="flex flex-wrap gap-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">

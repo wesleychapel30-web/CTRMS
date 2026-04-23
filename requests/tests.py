@@ -205,6 +205,43 @@ class RequestWorkflowTests(TestCase):
             self.assertEqual(float(request_obj.remaining_balance), -500.0)
             self.assertEqual(RequestDocument.objects.count(), 1)
 
+    def test_request_document_download_supports_inline_preview(self):
+        with override_settings(MEDIA_ROOT=self.media_root):
+            director = User.objects.create_user(
+                username='director-inline-request',
+                password='StrongPass1',
+                email='director-inline-request@example.com',
+                role=User.Role.DIRECTOR,
+                is_staff=True,
+            )
+            request_obj = Request.objects.create(
+                applicant_name='Preview User',
+                applicant_email='preview@example.com',
+                applicant_phone='0711111111',
+                applicant_id='ID-201',
+                address='CBD',
+                category=Request.Category.MEDICAL,
+                description='Medical support',
+                amount_requested=5000,
+                created_by=director,
+            )
+            document = RequestDocument.objects.create(
+                request=request_obj,
+                document=SimpleUploadedFile('invoice.pdf', b'%PDF-1.4 invoice', content_type='application/pdf'),
+                document_type='Invoice',
+                uploaded_by=director,
+            )
+
+            api_client = Client()
+            api_client.force_login(director)
+            response = api_client.get(
+                reverse('document-download', args=[document.pk]),
+                {'disposition': 'inline'},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('inline;', response['Content-Disposition'])
+
     def test_admin_cannot_approve_even_with_request_approve_permission(self):
         request_obj = Request.objects.create(
             applicant_name='Case User',

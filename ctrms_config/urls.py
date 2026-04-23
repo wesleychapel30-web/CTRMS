@@ -27,6 +27,7 @@ urlpatterns = [
     path('', include('core.urls')),
     path('', include('requests.urls')),
     path('', include('invitations.urls')),
+    path('', include('enterprise.urls')),
     path('assets/<path:path>', FrontendAssetView.as_view(), name='frontend_asset'),
     re_path(r'^(?!api/|admin/|media/|static/|assets/|export/).*$' , FrontendAppView.as_view(), name='frontend_app'),
 ]

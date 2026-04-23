@@ -110,6 +110,9 @@ yarn-error.log*
 pnpm-debug.log*
 frontend/tsconfig.app.tsbuildinfo
 frontend/tsconfig.node.tsbuildinfo
+frontend/playwright-report/
+frontend/test-results/
+e2e-*.sqlite3
 
 # Keep frontend source helpers tracked
 !frontend/src/lib/
@@ -118,3 +121,7 @@ frontend/tsconfig.node.tsbuildinfo
 # Local app data
 logs/
 test_media_requests/
+test_media_invitations/
+
+# Claude Code memory
+.claude/

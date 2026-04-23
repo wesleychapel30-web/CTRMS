@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "../components/DataTable";
 import { SectionCard } from "../components/SectionCard";
 import { UserActionMenu } from "../components/UserActionMenu";
+import { WorkspaceTabs } from "../components/WorkspaceTabs";
 import { useToast } from "../context/ToastContext";
 import {
   createUser,
@@ -37,6 +38,8 @@ type UserAction = {
   onClick: () => void;
   destructive?: boolean;
 };
+
+type AdminWorkspaceTab = "directory" | "selected-user" | "roles" | "activity" | "security";
 
 const emptyCreateForm = {
   username: "",
@@ -77,7 +80,9 @@ export function AdminPage() {
   const [rbacError, setRbacError] = useState<string | null>(null);
 
   const [createForm, setCreateForm] = useState(emptyCreateForm);
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<AdminWorkspaceTab>("directory");
   const [editForm, setEditForm] = useState(emptyEditForm);
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
   const [resetPasswordValue, setResetPasswordValue] = useState("");
@@ -246,7 +251,6 @@ export function AdminPage() {
   }
 
   const policyBoundPermissions = rbac?.policy_bound_permissions ?? {};
-  const rightColumnVisible = canManageRbac || canViewActivity;
 
   const updateUserStatus = async (target: UserRow, payload: Parameters<typeof updateUser>[1], message: string) => {
     setError(null);
@@ -282,8 +286,22 @@ export function AdminPage() {
   const buildUserActions = (user: UserRow): UserAction[] => {
     const lifecycle = resolveUserLifecycleState(user);
     const actions: UserAction[] = [
-      { key: "edit", label: "Edit User", onClick: () => setSelectedUserId(user.id) },
-      { key: "assign-role", label: "Assign Role", onClick: () => setSelectedUserId(user.id) }
+      {
+        key: "edit",
+        label: "Edit User",
+        onClick: () => {
+          setSelectedUserId(user.id);
+          setActiveTab("selected-user");
+        }
+      },
+      {
+        key: "assign-role",
+        label: "Assign Role",
+        onClick: () => {
+          setSelectedUserId(user.id);
+          setActiveTab("selected-user");
+        }
+      }
     ];
 
     if (canResetPassword) {
@@ -378,152 +396,119 @@ export function AdminPage() {
   const recentSecurityEvents = activity.filter((entry) =>
     /denied|blocked|reset|deactivate|archive|lock/i.test(`${entry.action_label} ${entry.description}`)
   );
+  const workspaceTabs = useMemo(() => {
+    const tabs: Array<{ key: AdminWorkspaceTab; label: string; badge?: string | number | null }> = [];
+    if (canManageUsers) {
+      tabs.push({ key: "directory", label: "User Directory", badge: users.length });
+      tabs.push({ key: "selected-user", label: "Selected User", badge: selectedUser ? 1 : null });
+    }
+    if (canManageRbac) {
+      tabs.push({ key: "roles", label: "Roles & Permissions", badge: rbac?.roles.length ?? null });
+    }
+    if (canViewActivity) {
+      tabs.push({ key: "activity", label: "Activity Logs", badge: activity.length });
+      tabs.push({ key: "security", label: "Security Events", badge: recentSecurityEvents.length });
+    }
+    return tabs;
+  }, [activity.length, canManageRbac, canManageUsers, canViewActivity, rbac?.roles.length, recentSecurityEvents.length, selectedUser, users.length]);
+
+  useEffect(() => {
+    if (!workspaceTabs.some((tab) => tab.key === activeTab)) {
+      const nextTab = workspaceTabs[0]?.key;
+      if (nextTab) {
+        setActiveTab(nextTab);
+      }
+    }
+  }, [activeTab, workspaceTabs]);
 
   return (
-    <div className="space-y-8">
+    <>
+    <div className="space-y-4">
       {canManageUsers ? (
-        <section className="grid gap-6 xl:grid-cols-[1fr_18rem]">
-          <div className="metric-strip rounded-xl px-6 py-7">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="section-kicker">Administration Panel</p>
-                <h2 className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em] text-[var(--ink)]">
-                  User management and access governance
-                </h2>
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--muted)]">
-                  Control institutional access, assign role bundles, reset passwords, and maintain audit-ready administration records.
-                </p>
-              </div>
+        <section className="grid gap-4 xl:grid-cols-12">
+          <div className="metric-strip rounded-xl px-4 py-4 xl:col-span-7">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="headline-font text-xl font-extrabold tracking-[-0.04em] text-[var(--ink)]">
+                User Management
+              </h2>
               <button
                 type="button"
-                onClick={() => document.getElementById("create-user-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                className="primary-button rounded-md px-4 py-2.5 text-sm font-semibold"
+                onClick={() => setShowCreatePanel(true)}
+                className="primary-button rounded-md px-3 py-2 text-xs font-semibold"
               >
-                Create New User
+                New User
               </button>
             </div>
 
-            <div className="mt-8 grid gap-4 md:grid-cols-[repeat(4,minmax(0,1fr))_15rem]">
-              <StatTile label="Total Users" value={String(totalUsers)} note="System users" />
-              <StatTile label="Active Sessions" value={String(overview?.summary.active_users ?? 0)} note="Currently active" />
-              <StatTile label="Pending Invites" value={String(overview?.summary.audit_events_today ?? 0)} note="Recent admin events" />
-              <StatTile label="Departments" value={String(overview?.summary.departments ?? 0)} note="Configured units" />
-              <div className="hero-card rounded-xl p-5">
-                <p className="section-kicker">Security Health</p>
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="h-2 flex-1 rounded-full bg-[var(--surface-container)]">
-                    <div className="h-2 rounded-full bg-[var(--accent)]" style={{ width: `${securityHealth}%` }} />
-                  </div>
-                  <span className="text-sm font-bold text-[var(--ink)]">{securityHealth}%</span>
-                </div>
-                <p className="mt-3 text-xs text-[var(--muted)]">Account state health based on visible active users.</p>
-              </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <StatTile label="Total Users" value={String(totalUsers)} note="Users" />
+              <StatTile label="Active Sessions" value={String(overview?.summary.active_users ?? 0)} note="Active now" />
+              <StatTile label="Admin Events" value={String(overview?.summary.audit_events_today ?? 0)} note="Today" />
+              <StatTile label="Departments" value={String(overview?.summary.departments ?? 0)} note="Units" />
             </div>
           </div>
 
-          <div className="dark-hero-card rounded-xl p-6 text-white">
-            <p className="section-kicker text-white/55">Policy Posture</p>
-            <h3 className="headline-font mt-3 text-xl font-bold tracking-[-0.04em] text-white">
-              Automated policy enforcement
-            </h3>
-            <p className="mt-4 text-sm leading-7 text-white/68">
-              Sensitive actions stay permission-gated, archived users remain attached to historical records, and password resets continue through the protected admin flow.
-            </p>
+          <div className="hero-card rounded-xl p-4 xl:col-span-5">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="headline-font text-sm font-bold tracking-[-0.03em] text-[var(--ink)]">
+                Access Overview
+              </h3>
+              <span className="rounded-full bg-[var(--surface-low)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                {securityHealth}% secure
+              </span>
+            </div>
+            <div className="mt-3">
+              <div className="h-1.5 rounded-full bg-[var(--surface-container)]">
+                <div className="h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${securityHealth}%` }} />
+              </div>
+              <p className="mt-2 text-xs text-[var(--muted)]">Sensitive actions remain permission-gated and recorded.</p>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <OverviewTile label="Administrators" value={String(overview?.summary.admins ?? 0)} note="Assigned" />
+              <OverviewTile label="Directors" value={String(overview?.summary.directors ?? 0)} note="Assigned" />
+              <OverviewTile label="Flagged Events" value={String(recentSecurityEvents.length)} note="Current view" />
+              <OverviewTile
+                label="Selection"
+                value={selectedUser ? selectedUser.name : "None"}
+                note={selectedUser ? getUserStatus(selectedUser) : "Choose a user"}
+              />
+            </div>
           </div>
         </section>
       ) : null}
 
-      <div className={canManageUsers && rightColumnVisible ? "grid gap-6 xl:grid-cols-[1.2fr_0.8fr]" : "space-y-6"}>
-        {canManageUsers ? (
-        <div className="space-y-6">
-          <SectionCard title="User Management" subtitle="Manage users, roles, and permissions.">
-            {error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}
+      {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
 
-          <div id="create-user-panel" className="rounded-xl bg-[var(--surface-low)] p-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="section-kicker">Create User</p>
-                <h3 className="headline-font mt-2 text-xl font-bold tracking-[-0.04em] text-[var(--ink)]">Register a new account</h3>
-              </div>
-              <span className="rounded-sm bg-[var(--surface-card)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                User Setup
-              </span>
+      {canManageUsers ? (
+        <section className="surface-panel overflow-hidden rounded-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--surface-low)] px-4 py-3">
+            <div>
+              <h3 className="headline-font text-sm font-bold tracking-[-0.02em] text-[var(--ink)]">User Directory</h3>
+              {selectedUser ? (
+                <p className="mt-0.5 text-xs text-[var(--muted)]">Selected: {selectedUser.name}</p>
+              ) : null}
             </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <input value={createForm.full_name} onChange={(event) => setCreateForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Full name" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
-              <input value={createForm.username} onChange={(event) => setCreateForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Username" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
-              <input value={createForm.email} onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" type="email" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
-              <input value={createForm.department} onChange={(event) => setCreateForm((prev) => ({ ...prev, department: event.target.value }))} placeholder="Department" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
-              <select
-                value={createForm.role}
-                onChange={(event) =>
-                  setCreateForm((prev) => ({
-                    ...prev,
-                    role: event.target.value,
-                    additional_roles: prev.additional_roles.filter((roleKey) => roleKey !== event.target.value)
-                  }))
-                }
-                className="institutional-input rounded-md px-4 py-3 text-sm outline-none"
-              >
-                {ROLE_OPTIONS.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <input value={createForm.password} onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Temporary password" type="password" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
-              <label className="md:col-span-2 flex items-center justify-between rounded-lg bg-[var(--surface-card)] px-4 py-3 text-sm">
-                <span className="font-medium text-[var(--ink)]">Force password change on first login</span>
-                <input type="checkbox" checked={createForm.force_password_change} onChange={(event) => setCreateForm((prev) => ({ ...prev, force_password_change: event.target.checked }))} />
-              </label>
-              <div className="md:col-span-2 rounded-lg bg-[var(--surface-card)] px-4 py-4">
-                <p className="section-kicker">Additional Roles</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {availableCreateAdditionalRoles.map((option) => (
-                    <label key={option.key} className="mt-3 flex items-center gap-2 text-sm text-[var(--ink)]">
-                      <input
-                        type="checkbox"
-                        checked={createForm.additional_roles.includes(option.key)}
-                        onChange={(event) =>
-                          setCreateForm((prev) => ({ ...prev, additional_roles: toggleRole(prev.additional_roles, option.key, event.target.checked) }))
-                        }
-                      />
-                      <span>{option.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {selectedUser ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserId(null)}
+                  className="secondary-button rounded-md px-4 py-2.5 text-sm font-semibold"
+                >
+                  Clear Selection
+                </button>
+              ) : null}
             </div>
-            <button
-              type="button"
-              onClick={() =>
-                void createUser(createForm)
-                  .then(() => {
-                    setCreateForm(emptyCreateForm);
-                    toast.success("User account created.", "User added");
-                    return loadAdmin();
-                  })
-                  .catch((reason) => {
-                    const message = toMessage(reason);
-                    setError(message);
-                    toast.error(message);
-                  })
-              }
-              className="primary-button mt-4 rounded-md px-4 py-2.5 text-sm font-semibold"
-            >
-              Add User
-            </button>
           </div>
-
           <DataTable
             columns={[
               {
                 key: "name",
                 label: "User",
                 render: (user) => (
-                  <div>
+                  <div className="space-y-0.5 leading-tight">
                     <p className="font-medium text-slate-900 dark:text-slate-100">{user.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">{user.email}</p>
                   </div>
                 )
               },
@@ -531,9 +516,9 @@ export function AdminPage() {
                 key: "role_label",
                 label: "Role",
                 render: (user) => (
-                  <div>
+                  <div className="space-y-0.5 leading-tight">
                     <p className="text-sm">{user.role_label}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
                       {user.additional_roles?.length ? `+ ${user.additional_roles.join(", ")}` : "No additional role"}
                     </p>
                   </div>
@@ -564,13 +549,122 @@ export function AdminPage() {
               }
             ]}
             rows={users}
+            density="compact"
             emptyMessage="No users found."
           />
-          </SectionCard>
+        </section>
+      ) : null}
 
-          {selectedUser ? (
-            <SectionCard title="Edit User" subtitle="Update profile and account state.">
-            <div className="grid gap-3 md:grid-cols-2">
+      <section className="surface-panel rounded-xl p-3">
+        <WorkspaceTabs tabs={workspaceTabs} activeTab={activeTab} onChange={setActiveTab} />
+      </section>
+
+      {canManageUsers && activeTab === "directory" ? (
+        <section className="surface-panel overflow-hidden rounded-xl">
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-low)] px-6 py-4">
+            <div>
+              <h3 className="headline-font text-base font-bold tracking-[-0.03em] text-[var(--ink)]">User Directory</h3>
+              {selectedUser ? <p className="mt-1 text-sm text-[var(--muted)]">Selected: {selectedUser.name}</p> : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {selectedUser ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserId(null)}
+                  className="secondary-button rounded-md px-4 py-2.5 text-sm font-semibold"
+                >
+                  Clear Selection
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <DataTable
+            columns={[
+              {
+                key: "name",
+                label: "User",
+                render: (user) => (
+                  <div className="space-y-0.5 leading-tight">
+                    <p className="font-medium text-slate-900 dark:text-slate-100">{user.name}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">{user.email}</p>
+                  </div>
+                )
+              },
+              {
+                key: "role_label",
+                label: "Role",
+                render: (user) => (
+                  <div className="space-y-0.5 leading-tight">
+                    <p className="text-sm">{user.role_label}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {user.additional_roles?.length ? `+ ${user.additional_roles.join(", ")}` : "No additional role"}
+                    </p>
+                  </div>
+                )
+              },
+              {
+                key: "status",
+                label: "Status",
+                render: (user) => (
+                  <div>
+                    <p className="text-sm">{getUserStatus(user)}</p>
+                    {user.force_password_change ? <p className="text-xs text-amber-600 dark:text-amber-300">Password change required</p> : null}
+                  </div>
+                )
+              },
+              {
+                key: "last_login",
+                label: "Last Login",
+                render: (user) => {
+                  const lastLogin = (user as UserRow & { last_login?: string | null }).last_login;
+                  return <span className="text-sm text-slate-600 dark:text-slate-300">{lastLogin ? formatDateTime(lastLogin) : "N/A"}</span>;
+                }
+              },
+              {
+                key: "actions",
+                label: "Actions",
+                render: (user) => <UserActionMenu actions={buildUserActions(user)} />
+              }
+            ]}
+            rows={users}
+            density="compact"
+            emptyMessage="No users found."
+          />
+        </section>
+      ) : null}
+
+      {canManageUsers && activeTab === "selected-user" ? (
+        selectedUser ? (
+          <SectionCard
+            title="Selected User"
+            action={
+              canResetPassword ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetTarget(selectedUser);
+                    setResetPasswordValue("");
+                    setResetForcePasswordChange(true);
+                  }}
+                  className="secondary-button rounded-md px-3 py-2 text-xs font-semibold"
+                >
+                  Reset Password
+                </button>
+              ) : undefined
+            }
+          >
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <OverviewTile label="Name" value={selectedUser.name} note={selectedUser.username} />
+              <OverviewTile label="Status" value={getUserStatus(selectedUser)} note={selectedUser.role_label} />
+              <OverviewTile label="Department" value={selectedUser.department || "Unassigned"} note="Assigned unit" />
+              <OverviewTile
+                label="Password"
+                value={selectedUser.force_password_change ? "Change required" : "Normal"}
+                note="Next sign-in"
+              />
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
               <input value={editForm.full_name} onChange={(event) => setEditForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Full name" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
               <input value={editForm.email} onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" type="email" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
               <input value={editForm.department} onChange={(event) => setEditForm((prev) => ({ ...prev, department: event.target.value }))} placeholder="Department" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
@@ -665,56 +759,18 @@ export function AdminPage() {
                 Clear Selection
               </button>
             </div>
-            </SectionCard>
-          ) : null}
-
-          {resetTarget ? (
-            <SectionCard title="Reset Password" subtitle={`Reset password for ${resetTarget.name}.`}>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input value={resetPasswordValue} onChange={(event) => setResetPasswordValue(event.target.value)} placeholder="New temporary password" type="password" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
-              <label className="flex items-center justify-between rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
-                <span className="font-medium text-[var(--ink)]">Force password change on next login</span>
-                <input type="checkbox" checked={resetForcePasswordChange} onChange={(event) => setResetForcePasswordChange(event.target.checked)} />
-              </label>
+          </SectionCard>
+        ) : (
+          <SectionCard title="Selected User">
+            <div className="rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface-low)] px-4 py-10 text-center text-sm text-[var(--muted)]">
+              Select a user from the User Directory tab to edit account details, roles, and access state.
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  void resetUserPassword(resetTarget.id, {
-                    new_password: resetPasswordValue,
-                    force_password_change: resetForcePasswordChange
-                  })
-                    .then(() => {
-                      toast.success("Password reset completed.");
-                      setResetTarget(null);
-                      setResetPasswordValue("");
-                      setResetForcePasswordChange(true);
-                      return loadAdmin();
-                    })
-                    .catch((reason) => {
-                      const message = toMessage(reason);
-                      setError(message);
-                      toast.error(message);
-                    })
-                }
-                className="primary-button rounded-md px-4 py-2.5 text-sm font-semibold"
-              >
-                Reset Password
-              </button>
-              <button type="button" onClick={() => setResetTarget(null)} className="secondary-button rounded-md px-4 py-2.5 text-sm font-semibold">
-                Cancel
-              </button>
-            </div>
-            </SectionCard>
-          ) : null}
-        </div>
+          </SectionCard>
+        )
       ) : null}
 
-      {rightColumnVisible ? (
-        <div className="space-y-6">
-        {canManageRbac ? (
-          <SectionCard title="Roles & Permissions" subtitle="Permission mapping by role.">
+      {canManageRbac && activeTab === "roles" ? (
+        <SectionCard title="Roles & Permissions">
             {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
             {isLoadingRbac ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">Loading role permissions...</p>
@@ -811,37 +867,36 @@ export function AdminPage() {
             ) : (
               <p className="text-sm text-slate-500 dark:text-slate-400">Role permissions are not available.</p>
             )}
-          </SectionCard>
-        ) : null}
+        </SectionCard>
+      ) : null}
 
-        <SectionCard title="Activity Logs" subtitle="Recent administration actions.">
-          {canViewActivity ? (
-            isLoadingActivity ? (
-              <p className="text-sm text-[var(--muted)]">Loading activity logs...</p>
-            ) : activityError ? (
-              <p className="text-sm text-[var(--muted)]">{activityError}</p>
-            ) : activity.length ? (
-              <div className="space-y-3">
-                {activity.map((entry) => (
-                  <div key={entry.id} className="rounded-lg bg-[var(--surface-low)] px-4 py-3">
-                    <p className="text-sm font-semibold text-[var(--ink)]">{entry.user}</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">{entry.message ?? `${sentenceCase(entry.action_label)} · ${entry.content_type}`}</p>
-                    <p className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(entry.created_at)}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[var(--muted)]">No recent activity logs available.</p>
-            )
+      {canViewActivity && activeTab === "activity" ? (
+        <SectionCard title="Activity Logs">
+          {isLoadingActivity ? (
+            <p className="text-sm text-[var(--muted)]">Loading activity logs...</p>
+          ) : activityError ? (
+            <p className="text-sm text-[var(--muted)]">{activityError}</p>
+          ) : activity.length ? (
+            <div className="space-y-3">
+              {activity.map((entry) => (
+                <div key={entry.id} className="rounded-lg bg-[var(--surface-low)] px-4 py-3">
+                  <p className="text-sm font-semibold text-[var(--ink)]">{entry.user}</p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">{entry.message ?? `${sentenceCase(entry.action_label)} · ${entry.content_type}`}</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(entry.created_at)}</p>
+                </div>
+              ))}
+            </div>
           ) : (
-            <p className="text-sm text-[var(--muted)]">Activity logs are restricted to authorized roles.</p>
+            <p className="text-sm text-[var(--muted)]">No recent activity logs available.</p>
           )}
         </SectionCard>
+      ) : null}
 
-        <SectionCard title="Recent Security Events" subtitle="Flagged user and policy actions.">
+      {canViewActivity && activeTab === "security" ? (
+        <SectionCard title="Recent Security Events">
           {recentSecurityEvents.length ? (
             <div className="space-y-3">
-              {recentSecurityEvents.slice(0, 3).map((entry) => (
+              {recentSecurityEvents.slice(0, 6).map((entry) => (
                 <div key={entry.id} className="flex gap-3">
                   <span className="mt-1 h-2 w-2 rounded-full bg-[var(--danger)]" />
                   <div>
@@ -855,10 +910,169 @@ export function AdminPage() {
             <p className="text-sm text-[var(--muted)]">No flagged security events in the current view.</p>
           )}
         </SectionCard>
-        </div>
       ) : null}
-      </div>
+      
     </div>
+
+    {showCreatePanel ? (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm"
+        onClick={() => setShowCreatePanel(false)}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="New user"
+          className="surface-panel w-full max-w-4xl rounded-2xl p-5 shadow-2xl sm:p-6"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <h3 className="headline-font text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">New User</h3>
+            <button type="button" onClick={() => setShowCreatePanel(false)} className="secondary-button rounded-md px-3 py-2 text-sm font-semibold">
+              Close
+            </button>
+          </div>
+          {error ? <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
+            <input value={createForm.full_name} onChange={(event) => setCreateForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Full name" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+            <input value={createForm.username} onChange={(event) => setCreateForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Username" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+            <input value={createForm.email} onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" type="email" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+            <input value={createForm.department} onChange={(event) => setCreateForm((prev) => ({ ...prev, department: event.target.value }))} placeholder="Department" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+            <select
+              value={createForm.role}
+              onChange={(event) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  role: event.target.value,
+                  additional_roles: prev.additional_roles.filter((roleKey) => roleKey !== event.target.value)
+                }))
+              }
+              className="institutional-input rounded-md px-4 py-3 text-sm outline-none"
+            >
+              {ROLE_OPTIONS.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <input value={createForm.password} onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Temporary password" type="password" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+            <label className="md:col-span-2 flex items-center justify-between rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
+              <span className="font-medium text-[var(--ink)]">Force password change on first login</span>
+              <input type="checkbox" checked={createForm.force_password_change} onChange={(event) => setCreateForm((prev) => ({ ...prev, force_password_change: event.target.checked }))} />
+            </label>
+            <div className="md:col-span-2 rounded-lg bg-[var(--surface-low)] px-4 py-4">
+              <p className="section-kicker">Additional Roles</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {availableCreateAdditionalRoles.map((option) => (
+                  <label key={option.key} className="mt-3 flex items-center gap-2 text-sm text-[var(--ink)]">
+                    <input
+                      type="checkbox"
+                      checked={createForm.additional_roles.includes(option.key)}
+                      onChange={(event) =>
+                        setCreateForm((prev) => ({ ...prev, additional_roles: toggleRole(prev.additional_roles, option.key, event.target.checked) }))
+                      }
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setCreateForm(emptyCreateForm);
+                setShowCreatePanel(false);
+              }}
+              className="secondary-button rounded-md px-4 py-2.5 text-sm font-semibold"
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void createUser(createForm)
+                  .then(() => {
+                    setCreateForm(emptyCreateForm);
+                    setShowCreatePanel(false);
+                    toast.success("User account created.", "User added");
+                    return loadAdmin();
+                  })
+                  .catch((reason) => {
+                    const message = toMessage(reason);
+                    setError(message);
+                    toast.error(message);
+                  })
+              }
+              className="primary-button rounded-md px-4 py-2.5 text-sm font-semibold"
+            >
+              Add User
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+
+    {resetTarget ? (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm"
+        onClick={() => setResetTarget(null)}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Reset user password"
+          className="surface-panel w-full max-w-2xl rounded-2xl p-5 shadow-2xl sm:p-6"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <h3 className="headline-font text-2xl font-bold tracking-[-0.04em] text-[var(--ink)]">Reset Password</h3>
+            <button type="button" onClick={() => setResetTarget(null)} className="secondary-button rounded-md px-3 py-2 text-sm font-semibold">
+              Close
+            </button>
+          </div>
+          <p className="mt-2 text-sm text-[var(--muted)]">{resetTarget.name}</p>
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
+            <input value={resetPasswordValue} onChange={(event) => setResetPasswordValue(event.target.value)} placeholder="New temporary password" type="password" className="institutional-input rounded-md px-4 py-3 text-sm outline-none" />
+            <label className="flex items-center justify-between rounded-lg bg-[var(--surface-low)] px-4 py-3 text-sm">
+              <span className="font-medium text-[var(--ink)]">Force password change on next login</span>
+              <input type="checkbox" checked={resetForcePasswordChange} onChange={(event) => setResetForcePasswordChange(event.target.checked)} />
+            </label>
+          </div>
+          <div className="mt-6 flex flex-wrap justify-end gap-3">
+            <button type="button" onClick={() => setResetTarget(null)} className="secondary-button rounded-md px-4 py-2.5 text-sm font-semibold">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void resetUserPassword(resetTarget.id, {
+                  new_password: resetPasswordValue,
+                  force_password_change: resetForcePasswordChange
+                })
+                  .then(() => {
+                    toast.success("Password reset completed.");
+                    setResetTarget(null);
+                    setResetPasswordValue("");
+                    setResetForcePasswordChange(true);
+                    return loadAdmin();
+                  })
+                  .catch((reason) => {
+                    const message = toMessage(reason);
+                    setError(message);
+                    toast.error(message);
+                  })
+              }
+              className="primary-button rounded-md px-4 py-2.5 text-sm font-semibold"
+            >
+              Reset Password
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }
 
@@ -867,6 +1081,16 @@ function StatTile({ label, value, note }: { label: string; value: string; note: 
     <div className="table-stat rounded-xl px-5 py-4">
       <p className="section-kicker">{label}</p>
       <p className="mt-2 text-2xl font-bold text-[var(--ink)]">{value}</p>
+      <p className="mt-1 text-xs text-[var(--muted)]">{note}</p>
+    </div>
+  );
+}
+
+function OverviewTile({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div className="table-stat rounded-lg px-4 py-4">
+      <p className="section-kicker">{label}</p>
+      <p className="mt-2 line-clamp-2 text-lg font-semibold text-[var(--ink)]">{value}</p>
       <p className="mt-1 text-xs text-[var(--muted)]">{note}</p>
     </div>
   );

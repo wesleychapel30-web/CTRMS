@@ -59,7 +59,7 @@ export function NotificationDropdown({
           </div>
         ) : null}
         {!error && !isLoading && !visibleNotifications.length ? (
-          <div className="px-3 py-4 text-sm text-[var(--muted)]">No new operational notifications.</div>
+          <div className="px-3 py-4 text-sm text-[var(--muted)]">No notifications.</div>
         ) : null}
         {!error && !isLoading ? (
           <div className="space-y-1.5">

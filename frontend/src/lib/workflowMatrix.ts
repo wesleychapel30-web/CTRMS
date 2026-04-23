@@ -6,6 +6,10 @@ export type RequestActionVisibility = {
   showStartReview: boolean;
   showApprove: boolean;
   showReject: boolean;
+  showRequestClarification: boolean;
+  showFinanceStartProcessing: boolean;
+  showFinanceRaiseQuery: boolean;
+  showFinancePendingPayment: boolean;
   showRecordPayment: boolean;
   showAddPayment: boolean;
   showMarkCompleted: boolean;
@@ -15,163 +19,157 @@ export type RequestActionVisibility = {
   isFinal: boolean;
 };
 
+const NO_ACTIONS: RequestActionVisibility = {
+  showSaveDraft: false,
+  showSubmit: false,
+  showStartReview: false,
+  showApprove: false,
+  showReject: false,
+  showRequestClarification: false,
+  showFinanceStartProcessing: false,
+  showFinanceRaiseQuery: false,
+  showFinancePendingPayment: false,
+  showRecordPayment: false,
+  showAddPayment: false,
+  showMarkCompleted: false,
+  showCancel: false,
+  showRestore: false,
+  showReverse: false,
+  isFinal: false,
+};
+
 export function getRequestActionVisibility(status: string): RequestActionVisibility {
   const normalized = (status || "").toLowerCase();
 
   if (normalized === "draft") {
     return {
+      ...NO_ACTIONS,
       showSaveDraft: true,
       showSubmit: true,
-      showStartReview: false,
-      showApprove: false,
-      showReject: false,
-      showRecordPayment: false,
-      showAddPayment: false,
-      showMarkCompleted: false,
       showCancel: true,
-      showRestore: false,
-      showReverse: false,
-      isFinal: false
     };
   }
 
   if (normalized === "pending") {
     return {
-      showSaveDraft: false,
-      showSubmit: false,
+      ...NO_ACTIONS,
       showStartReview: true,
-      showApprove: false,
-      showReject: false,
-      showRecordPayment: false,
-      showAddPayment: false,
-      showMarkCompleted: false,
       showCancel: true,
-      showRestore: false,
-      showReverse: false,
-      isFinal: false
     };
   }
 
   if (normalized === "under_review") {
     return {
-      showSaveDraft: false,
-      showSubmit: false,
-      showStartReview: false,
+      ...NO_ACTIONS,
       showApprove: true,
       showReject: true,
-      showRecordPayment: false,
-      showAddPayment: false,
-      showMarkCompleted: false,
+      showRequestClarification: true,
       showCancel: true,
-      showRestore: false,
-      showReverse: false,
-      isFinal: false
     };
   }
 
+  if (normalized === "needs_clarification") {
+    return {
+      ...NO_ACTIONS,
+      showSaveDraft: true,
+      showSubmit: true,
+      showCancel: true,
+    };
+  }
+
+  if (normalized === "director_approved") {
+    return {
+      ...NO_ACTIONS,
+      showFinanceStartProcessing: true,
+      showReverse: true,
+      showCancel: true,
+    };
+  }
+
+  if (normalized === "director_rejected") {
+    return {
+      ...NO_ACTIONS,
+      showReverse: true,
+      isFinal: true,
+    };
+  }
+
+  if (normalized === "finance_processing") {
+    return {
+      ...NO_ACTIONS,
+      showFinanceRaiseQuery: true,
+      showFinancePendingPayment: true,
+      showCancel: true,
+    };
+  }
+
+  if (normalized === "finance_query") {
+    return {
+      ...NO_ACTIONS,
+      showFinanceStartProcessing: true,
+      showCancel: true,
+    };
+  }
+
+  if (normalized === "pending_payment") {
+    return {
+      ...NO_ACTIONS,
+      showRecordPayment: true,
+      showCancel: true,
+    };
+  }
+
+  // Legacy: inventory route final approval OR pre-new-workflow funded requests
   if (normalized === "approved") {
     return {
-      showSaveDraft: false,
-      showSubmit: false,
-      showStartReview: false,
-      showApprove: false,
-      showReject: false,
+      ...NO_ACTIONS,
       showRecordPayment: true,
-      showAddPayment: false,
-      showMarkCompleted: false,
       showCancel: true,
-      showRestore: false,
       showReverse: true,
-      isFinal: false
     };
   }
 
   if (normalized === "partially_paid") {
     return {
-      showSaveDraft: false,
-      showSubmit: false,
-      showStartReview: false,
-      showApprove: false,
-      showReject: false,
-      showRecordPayment: false,
+      ...NO_ACTIONS,
       showAddPayment: true,
       showMarkCompleted: true,
       showCancel: true,
-      showRestore: false,
-      showReverse: false,
-      isFinal: false
     };
   }
 
   if (normalized === "cancelled" || normalized === "archived") {
     return {
-      showSaveDraft: false,
-      showSubmit: false,
-      showStartReview: false,
-      showApprove: false,
-      showReject: false,
-      showRecordPayment: false,
-      showAddPayment: false,
-      showMarkCompleted: false,
-      showCancel: false,
+      ...NO_ACTIONS,
       showRestore: true,
-      showReverse: false,
-      isFinal: true
+      isFinal: true,
     };
   }
 
   if (normalized === "rejected") {
     return {
-      showSaveDraft: false,
-      showSubmit: false,
-      showStartReview: false,
-      showApprove: false,
-      showReject: false,
-      showRecordPayment: false,
-      showAddPayment: false,
-      showMarkCompleted: false,
-      showCancel: false,
-      showRestore: false,
+      ...NO_ACTIONS,
       showReverse: true,
-      isFinal: true
+      isFinal: true,
     };
   }
 
   if (normalized === "paid") {
     return {
-      showSaveDraft: false,
-      showSubmit: false,
-      showStartReview: false,
-      showApprove: false,
-      showReject: false,
-      showRecordPayment: false,
-      showAddPayment: false,
-      showMarkCompleted: false,
-      showCancel: false,
-      showRestore: false,
-      showReverse: false,
-      isFinal: true
+      ...NO_ACTIONS,
+      isFinal: true,
     };
   }
 
-  return {
-    showSaveDraft: false,
-    showSubmit: false,
-    showStartReview: false,
-    showApprove: false,
-    showReject: false,
-    showRecordPayment: false,
-    showAddPayment: false,
-    showMarkCompleted: false,
-    showCancel: false,
-    showRestore: false,
-    showReverse: false,
-    isFinal: false
-  };
+  return { ...NO_ACTIONS };
 }
 
 export type PaymentLifecycleState =
   | "Not Started"
+  | "Director Approved"
+  | "Finance Processing"
+  | "Finance Query"
+  | "Pending Payment"
   | "Pending Entry"
   | "Partially Paid"
   | "Fully Paid"
@@ -191,6 +189,18 @@ export function getPaymentLifecycleState(record: RequestRecord): PaymentLifecycl
   }
   if (status === "partially_paid") {
     return "Partially Paid";
+  }
+  if (status === "pending_payment") {
+    return "Pending Payment";
+  }
+  if (status === "finance_query") {
+    return "Finance Query";
+  }
+  if (status === "finance_processing") {
+    return "Finance Processing";
+  }
+  if (status === "director_approved") {
+    return "Director Approved";
   }
   if (status === "approved") {
     if (approvedAmount > 0 && disbursedAmount > 0 && disbursedAmount < approvedAmount) {

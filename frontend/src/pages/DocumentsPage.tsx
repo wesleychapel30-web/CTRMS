@@ -2,7 +2,7 @@ import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "../components/DataTable";
 import { InlineBanner } from "../components/FeedbackStates";
-import { fetchDocuments } from "../lib/api";
+import { fetchDocuments, resolveAssetUrl } from "../lib/api";
 import { formatDateTime, sentenceCase } from "../lib/format";
 import type { DocumentRecord } from "../types";
 
@@ -41,53 +41,49 @@ export function DocumentsPage() {
   const invitationCount = documents.filter((item) => item.record_type === "invitation").length;
 
   return (
-    <div className="space-y-8">
-      <section className="grid gap-6 xl:grid-cols-[1fr_20rem]">
-        <div className="metric-strip rounded-xl px-6 py-7">
-          <p className="section-kicker">Document Library</p>
-          <h2 className="headline-font mt-3 text-4xl font-extrabold tracking-[-0.06em] text-[var(--ink)]">
-            Institutional records and attachments
+    <div className="space-y-4">
+      <section className="grid gap-4 xl:grid-cols-[1fr_18rem]">
+        <div className="metric-strip rounded-xl px-4 py-4">
+          <h2 className="headline-font text-xl font-extrabold tracking-[-0.04em] text-[var(--ink)]">
+            Documents
           </h2>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--muted)]">
-            Browse uploaded files linked to requests and invitations, review upload dates, and open record attachments from a single operational library.
-          </p>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <div className="table-stat rounded-xl px-5 py-4">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="table-stat rounded-xl px-4 py-3">
               <p className="section-kicker">Total files</p>
-              <p className="mt-2 text-2xl font-bold text-[var(--ink)]">{documents.length}</p>
+              <p className="mt-1.5 text-xl font-bold text-[var(--ink)]">{documents.length}</p>
             </div>
-            <div className="table-stat rounded-xl px-5 py-4">
+            <div className="table-stat rounded-xl px-4 py-3">
               <p className="section-kicker">Request files</p>
-              <p className="mt-2 text-2xl font-bold text-[var(--ink)]">{requestCount}</p>
+              <p className="mt-1.5 text-xl font-bold text-[var(--ink)]">{requestCount}</p>
             </div>
-            <div className="table-stat rounded-xl px-5 py-4">
+            <div className="table-stat rounded-xl px-4 py-3">
               <p className="section-kicker">Invitation files</p>
-              <p className="mt-2 text-2xl font-bold text-[var(--ink)]">{invitationCount}</p>
+              <p className="mt-1.5 text-xl font-bold text-[var(--ink)]">{invitationCount}</p>
             </div>
           </div>
         </div>
 
-        <div className="hero-card rounded-xl p-6">
-          <p className="section-kicker">Archive Summary</p>
-          <h3 className="headline-font mt-3 text-xl font-bold tracking-[-0.04em] text-[var(--ink)]">
-            Active record storage
+        <div className="hero-card rounded-xl p-4">
+          <p className="section-kicker">Summary</p>
+          <h3 className="headline-font mt-2 text-base font-bold tracking-[-0.03em] text-[var(--ink)]">
+            Record files
           </h3>
-          <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-            Use the document library to verify record attachments, trace upload dates, and open linked files without leaving the system workflow.
+          <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
+            Review upload dates and open linked files.
           </p>
         </div>
       </section>
 
       <section className="surface-panel overflow-hidden rounded-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-low)] px-6 py-4">
-          <div className="relative min-w-[16rem] flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--surface-low)] px-4 py-3">
+          <div className="relative min-w-[14rem] flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--muted)]" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search by file name, record, or type"
-              className="institutional-input w-full rounded-md px-4 py-2.5 pl-10 outline-none"
+              className="institutional-input w-full rounded-md px-3 py-2 pl-9 text-sm outline-none"
             />
           </div>
 
@@ -135,7 +131,7 @@ export function DocumentsPage() {
               label: "Action",
               render: (row) => (
                 <a
-                  href={row.url}
+                  href={resolveAssetUrl(row.url)}
                   target="_blank"
                   rel="noreferrer"
                   className="secondary-button inline-flex rounded-md px-3 py-1.5 text-xs font-semibold"
@@ -147,7 +143,7 @@ export function DocumentsPage() {
           ]}
           rows={filteredDocuments}
           isLoading={isLoading}
-          loadingMessage="Loading document library..."
+          loadingMessage="Loading documents..."
           emptyMessage="No documents available."
         />
       </section>

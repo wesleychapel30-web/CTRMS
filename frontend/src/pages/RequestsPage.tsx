@@ -110,10 +110,9 @@ export function RequestsPage() {
   }, [search, status, category]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <SectionCard
-        title="Requests Management"
-        subtitle="Monitor request lifecycles from draft through completion."
+        title="Requests"
         action={canExport || canCreateRequest ? (
           <div className="flex gap-2">
             {canCreateRequest ? (
@@ -138,14 +137,14 @@ export function RequestsPage() {
           </div>
         ) : undefined}
       >
-        <FilterBar className="rounded-lg bg-[var(--surface-low)] p-5">
+        <FilterBar className="rounded-lg bg-[var(--surface-low)] p-3">
           <label className="flex min-w-[16rem] items-center gap-2 rounded-sm bg-[var(--surface-card)] px-3 py-2.5 text-sm text-[var(--muted)]">
             <Search className="h-4 w-4 text-[var(--muted)]" />
             <input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               className="w-full bg-transparent outline-none placeholder:text-[var(--muted)]"
-              placeholder="Search by applicant or request ID"
+              placeholder="Search requests"
             />
           </label>
           <label className="inline-flex items-center gap-2 rounded-sm bg-[var(--surface-card)] px-3 py-2.5 text-sm text-[var(--ink)]">
@@ -235,6 +234,7 @@ export function RequestsPage() {
             }
           ]}
           rows={rows}
+          density="compact"
           isLoading={isLoading}
           loadingMessage="Loading request records..."
           sort={sort}

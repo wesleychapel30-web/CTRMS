@@ -91,4 +91,9 @@ class Command(BaseCommand):
         else:
             self.stdout.write("Director user already exists.")
 
+        try:
+            call_command("bootstrap_enterprise")
+        except Exception as exc:
+            self.stdout.write(self.style.WARNING(f"Enterprise bootstrap skipped: {exc}"))
+
         self.stdout.write(self.style.SUCCESS("Bootstrap complete."))
