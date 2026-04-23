@@ -15,7 +15,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         seed_rbac_defaults(sync_role_permissions=True)
-        call_command("bootstrap_enterprise")
+        call_command("bootstrap_enterprise", include_demo=True)
 
         actor = (
             User.objects.filter(is_superuser=True).order_by("created_at").first()

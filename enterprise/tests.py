@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.core.management import call_command
 from django.test import TestCase
 
 from core.models import RoleDefinition, User
@@ -40,6 +41,40 @@ from .services import (
     revert_procurement_request_approval,
     submit_procurement_request,
 )
+
+
+class EnterpriseBootstrapCommandTests(TestCase):
+    def setUp(self):
+        seed_rbac_defaults(sync_role_permissions=True)
+        self.actor = User.objects.create_user(
+            username="bootstrap-admin",
+            password="StrongPass123!",
+            email="bootstrap-admin@example.com",
+            role=User.Role.ADMIN,
+            is_staff=True,
+            is_active=True,
+        )
+
+    def test_bootstrap_enterprise_uses_production_baseline_by_default(self):
+        call_command("bootstrap_enterprise", verbosity=0)
+
+        self.assertTrue(Organization.objects.filter(code="HQ", currency_code="TZS").exists())
+        self.assertTrue(Department.objects.filter(code="PROC").exists())
+        self.assertTrue(Department.objects.filter(code="FIN").exists())
+        self.assertTrue(Department.objects.filter(code="OPS").exists())
+        self.assertTrue(ApprovalWorkflowTemplate.objects.filter(code="PR-STANDARD").exists())
+        self.assertFalse(ProcurementRequest.objects.filter(request_number__startswith="PR-DEMO-").exists())
+        self.assertFalse(Vendor.objects.filter(code="VEND-ALPHA").exists())
+        self.assertFalse(Product.objects.filter(sku__startswith="SKU-LAPTOP").exists())
+        self.assertFalse(BudgetAccount.objects.filter(code="OPS-CAPEX").exists())
+
+    def test_bootstrap_enterprise_demo_records_are_opt_in(self):
+        call_command("bootstrap_enterprise", include_demo=True, verbosity=0)
+
+        self.assertTrue(ProcurementRequest.objects.filter(request_number__startswith="PR-DEMO-").exists())
+        self.assertTrue(Vendor.objects.filter(code="VEND-ALPHA").exists())
+        self.assertTrue(Product.objects.filter(sku="SKU-LAPTOP-001").exists())
+        self.assertTrue(BudgetAccount.objects.filter(code="OPS-CAPEX").exists())
 
 
 class EnterpriseWorkflowTests(TestCase):

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+from django.utils.text import slugify
 
 from core.models import RoleDefinition, User
 from core.rbac_defaults import seed_rbac_defaults
@@ -36,6 +38,13 @@ from enterprise.services import (
     receive_purchase_order,
     submit_procurement_request,
 )
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _repair_enterprise_slice(organization: Organization) -> None:
@@ -95,7 +104,14 @@ def _repair_enterprise_slice(organization: Organization) -> None:
 
 
 class Command(BaseCommand):
-    help = "Seed enterprise foundation data and a procurement-to-finance demo flow."
+    help = "Bootstrap the enterprise production baseline. Demo records are opt-in with --include-demo."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--include-demo",
+            action="store_true",
+            help="Create the sample procurement-to-finance flow. Intended for local demos only.",
+        )
 
     def handle(self, *args, **options):
         seed_rbac_defaults(sync_role_permissions=True)
@@ -103,43 +119,179 @@ class Command(BaseCommand):
         admin_user = User.objects.filter(role=User.Role.ADMIN).order_by("created_at").first() or User.objects.filter(is_superuser=True).first()
         actor = admin_user or User.objects.order_by("created_at").first()
 
+        organization = self._bootstrap_organization()
+        departments = self._bootstrap_departments(organization, actor)
+        warehouse = self._bootstrap_branch_and_warehouse(organization)
+        self._bootstrap_workflows(organization)
+
+        include_demo = options["include_demo"] or _env_bool("CTRMS_BOOTSTRAP_DEMO_DATA")
+        if include_demo:
+            self._bootstrap_demo_flow(organization, departments, warehouse, actor)
+            message = "Enterprise baseline and optional demo flow bootstrapped."
+        else:
+            message = "Enterprise production baseline bootstrapped."
+
+        _repair_enterprise_slice(organization)
+        self.stdout.write(self.style.SUCCESS(message))
+
+    def _bootstrap_organization(self) -> Organization:
+        org_name = os.environ.get("CTRMS_ORG_NAME", os.environ.get("CTRMS_SITE_NAME", "CTRMS")).strip() or "CTRMS"
+        org_code = os.environ.get("CTRMS_ENTERPRISE_ORG_CODE", "HQ").strip().upper() or "HQ"
+        legal_name = os.environ.get("CTRMS_ORG_LEGAL_NAME", org_name).strip() or org_name
+        timezone_name = os.environ.get("CTRMS_TIMEZONE", "Africa/Dar_es_Salaam").strip() or "Africa/Dar_es_Salaam"
+
         organization, _ = Organization.objects.get_or_create(
-            code="HQ",
+            code=org_code,
             defaults={
-                "name": "Enterprise Operations Group",
-                "slug": "enterprise-operations-group",
-                "legal_name": "Enterprise Operations Group Ltd",
-                "timezone": "Africa/Nairobi",
-                "currency_code": "KES",
+                "name": org_name,
+                "slug": slugify(org_code) or "hq",
+                "legal_name": legal_name,
+                "timezone": timezone_name,
+                "currency_code": "TZS",
                 "is_active": True,
             },
         )
 
+        update_fields: list[str] = []
+        demo_names = {"Enterprise Operations Group", "Enterprise Operations Group Ltd"}
+        if organization.name in demo_names or not organization.name:
+            organization.name = org_name
+            update_fields.append("name")
+        if organization.legal_name in demo_names or not organization.legal_name:
+            organization.legal_name = legal_name
+            update_fields.append("legal_name")
+        if organization.timezone in {"Africa/Nairobi", ""}:
+            organization.timezone = timezone_name
+            update_fields.append("timezone")
+        if organization.currency_code != "TZS":
+            organization.currency_code = "TZS"
+            update_fields.append("currency_code")
+        if not organization.is_active:
+            organization.is_active = True
+            update_fields.append("is_active")
+        if update_fields:
+            organization.save(update_fields=[*update_fields, "updated_at"])
+        return organization
+
+    def _bootstrap_departments(self, organization: Organization, actor: User | None) -> dict[str, Department]:
         departments = {}
         for code, name in [
             ("PROC", "Procurement"),
             ("FIN", "Finance"),
             ("OPS", "Operations"),
-            ("HR", "Human Resources"),
-            ("COMP", "Compliance"),
-            ("CS", "Customer Service"),
         ]:
             departments[code], _ = Department.objects.get_or_create(
                 organization=organization,
                 code=code,
                 defaults={"name": name, "manager": actor},
             )
+        return departments
+
+    def _bootstrap_branch_and_warehouse(self, organization: Organization) -> Warehouse:
+        branch_name = os.environ.get("CTRMS_DEFAULT_BRANCH_NAME", "Head Office").strip() or "Head Office"
+        branch_city = os.environ.get("CTRMS_DEFAULT_CITY", "Dar es Salaam").strip() or "Dar es Salaam"
+        branch_country = os.environ.get("CTRMS_DEFAULT_COUNTRY", "Tanzania").strip() or "Tanzania"
+        branch_address = os.environ.get("CTRMS_DEFAULT_ADDRESS", "").strip()
 
         hq_branch, _ = Branch.objects.get_or_create(
             organization=organization,
             code="HQ-MAIN",
-            defaults={"name": "Headquarters", "city": "Nairobi", "country": "Kenya", "address": "Westlands Business Park"},
+            defaults={
+                "name": branch_name,
+                "city": branch_city,
+                "country": branch_country,
+                "address": branch_address,
+            },
         )
+        branch_update_fields: list[str] = []
+        if hq_branch.city in {"Nairobi", ""}:
+            hq_branch.city = branch_city
+            branch_update_fields.append("city")
+        if hq_branch.country in {"Kenya", ""}:
+            hq_branch.country = branch_country
+            branch_update_fields.append("country")
+        if hq_branch.address == "Westlands Business Park":
+            hq_branch.address = branch_address
+            branch_update_fields.append("address")
+        if branch_update_fields:
+            hq_branch.save(update_fields=[*branch_update_fields, "updated_at"])
+
+        warehouse_name = os.environ.get("CTRMS_DEFAULT_WAREHOUSE_NAME", "Main Warehouse").strip() or "Main Warehouse"
+        warehouse_location = os.environ.get("CTRMS_DEFAULT_WAREHOUSE_LOCATION", "").strip()
         warehouse, _ = Warehouse.objects.get_or_create(
             organization=organization,
             code="MAIN-WH",
-            defaults={"name": "Main Warehouse", "branch": hq_branch, "location": "Ground Floor Dispatch"},
+            defaults={"name": warehouse_name, "branch": hq_branch, "location": warehouse_location},
         )
+        if warehouse.location == "Ground Floor Dispatch" and warehouse_location != warehouse.location:
+            warehouse.location = warehouse_location
+            warehouse.save(update_fields=["location", "updated_at"])
+        return warehouse
+
+    def _bootstrap_workflows(self, organization: Organization) -> None:
+        admin_role = RoleDefinition.objects.get_or_create(key="admin", defaults={"name": "Administrator", "description": ""})[0]
+        finance_role = RoleDefinition.objects.get_or_create(key="finance_officer", defaults={"name": "Finance Officer", "description": ""})[0]
+
+        workflow, _ = ApprovalWorkflowTemplate.objects.get_or_create(
+            organization=organization,
+            code="PR-STANDARD",
+            defaults={
+                "name": "Standard Procurement Approval",
+                "module_key": ApprovalWorkflowTemplate.ModuleKey.PROCUREMENT_REQUEST,
+                "description": "Administrative review followed by finance budget confirmation.",
+                "is_active": True,
+            },
+        )
+        ApprovalWorkflowStep.objects.get_or_create(
+            workflow=workflow,
+            sequence=1,
+            defaults={"name": "Administrative review", "role": admin_role},
+        )
+        ApprovalWorkflowStep.objects.get_or_create(
+            workflow=workflow,
+            sequence=2,
+            defaults={"name": "Finance budget confirmation", "role": finance_role},
+        )
+
+        finance_invoice_workflow, _ = ApprovalWorkflowTemplate.objects.get_or_create(
+            organization=organization,
+            code="FIN-INV-STD",
+            defaults={
+                "name": "Finance Invoice Approval",
+                "module_key": ApprovalWorkflowTemplate.ModuleKey.FINANCE_INVOICE,
+                "description": "Finance invoice approval powered by the shared approval engine.",
+                "is_active": True,
+            },
+        )
+        ApprovalWorkflowStep.objects.get_or_create(
+            workflow=finance_invoice_workflow,
+            sequence=1,
+            defaults={"name": "Finance invoice confirmation", "role": finance_role},
+        )
+
+        payment_workflow, _ = ApprovalWorkflowTemplate.objects.get_or_create(
+            organization=organization,
+            code="FIN-PAY-STD",
+            defaults={
+                "name": "Payment Request Approval",
+                "module_key": ApprovalWorkflowTemplate.ModuleKey.PAYMENT_REQUEST,
+                "description": "Payment request approval powered by the shared approval engine.",
+                "is_active": True,
+            },
+        )
+        ApprovalWorkflowStep.objects.get_or_create(
+            workflow=payment_workflow,
+            sequence=1,
+            defaults={"name": "Finance settlement authorization", "role": finance_role},
+        )
+
+    def _bootstrap_demo_flow(
+        self,
+        organization: Organization,
+        departments: dict[str, Department],
+        warehouse: Warehouse,
+        actor: User | None,
+    ) -> None:
         budget, _ = BudgetAccount.objects.get_or_create(
             organization=organization,
             code="OPS-CAPEX",
@@ -178,59 +330,6 @@ class Command(BaseCommand):
                     "reorder_level": reorder_level,
                 },
             )
-
-        admin_role = RoleDefinition.objects.get_or_create(key="admin", defaults={"name": "Administrator", "description": ""})[0]
-        finance_role = RoleDefinition.objects.get_or_create(key="finance_officer", defaults={"name": "Finance Officer", "description": ""})[0]
-        workflow, _ = ApprovalWorkflowTemplate.objects.get_or_create(
-            organization=organization,
-            code="PR-STANDARD",
-            defaults={
-                "name": "Standard Procurement Approval",
-                "module_key": ApprovalWorkflowTemplate.ModuleKey.PROCUREMENT_REQUEST,
-                "description": "Admin review followed by finance budget confirmation.",
-                "is_active": True,
-            },
-        )
-        ApprovalWorkflowStep.objects.get_or_create(
-            workflow=workflow,
-            sequence=1,
-            defaults={"name": "Administrative review", "role": admin_role},
-        )
-        ApprovalWorkflowStep.objects.get_or_create(
-            workflow=workflow,
-            sequence=2,
-            defaults={"name": "Finance budget confirmation", "role": finance_role},
-        )
-        finance_invoice_workflow, _ = ApprovalWorkflowTemplate.objects.get_or_create(
-            organization=organization,
-            code="FIN-INV-STD",
-            defaults={
-                "name": "Finance Invoice Approval",
-                "module_key": ApprovalWorkflowTemplate.ModuleKey.FINANCE_INVOICE,
-                "description": "Finance invoice approval powered by the shared approval engine.",
-                "is_active": True,
-            },
-        )
-        ApprovalWorkflowStep.objects.get_or_create(
-            workflow=finance_invoice_workflow,
-            sequence=1,
-            defaults={"name": "Finance invoice confirmation", "role": finance_role},
-        )
-        payment_workflow, _ = ApprovalWorkflowTemplate.objects.get_or_create(
-            organization=organization,
-            code="FIN-PAY-STD",
-            defaults={
-                "name": "Payment Request Approval",
-                "module_key": ApprovalWorkflowTemplate.ModuleKey.PAYMENT_REQUEST,
-                "description": "Payment request approval powered by the shared approval engine.",
-                "is_active": True,
-            },
-        )
-        ApprovalWorkflowStep.objects.get_or_create(
-            workflow=payment_workflow,
-            sequence=1,
-            defaults={"name": "Finance settlement authorization", "role": finance_role},
-        )
 
         request_specs = [
             {
@@ -307,6 +406,3 @@ class Command(BaseCommand):
                 create_payment_request(invoice, actor=actor)
                 approve_payment_request(invoice.payment_request, actor=actor)
                 mark_payment_request_paid(invoice.payment_request, actor=actor, payment_reference="SEED-PAY-0003")
-
-        _repair_enterprise_slice(organization)
-        self.stdout.write(self.style.SUCCESS("Enterprise foundation and demo flow bootstrapped."))
