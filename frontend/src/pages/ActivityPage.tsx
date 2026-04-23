@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "../components/DataTable";
 import { InlineBanner, StatePanel } from "../components/FeedbackStates";
 import { useSession } from "../context/SessionContext";
+import { useToast } from "../context/ToastContext";
 import { fetchActivityLogs } from "../lib/api";
 import { formatDateTime, sentenceCase } from "../lib/format";
 import type { ActivityLogRecord } from "../types";
@@ -36,6 +37,7 @@ function downloadCsv(rows: ActivityLogRecord[]) {
 
 export function ActivityPage() {
   const { hasPermission } = useSession();
+  const toast = useToast();
   const [logs, setLogs] = useState<ActivityLogRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -88,6 +90,19 @@ export function ActivityPage() {
     return <StatePanel variant="info" title="Activity logs restricted" message="Only authorized roles can view activity logs." />;
   }
 
+  const handleExport = () => {
+    if (!filteredLogs.length) {
+      toast.warning("No activity logs to export.");
+      return;
+    }
+    try {
+      downloadCsv(filteredLogs);
+      toast.success(`${filteredLogs.length} activity log(s) exported.`, "CSV exported");
+    } catch (reason: unknown) {
+      toast.error(reason instanceof Error ? reason.message : "Export failed");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <section className="space-y-4">
@@ -98,7 +113,7 @@ export function ActivityPage() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => downloadCsv(filteredLogs)}
+              onClick={handleExport}
               className="secondary-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
             >
               <Download className="h-3.5 w-3.5" />

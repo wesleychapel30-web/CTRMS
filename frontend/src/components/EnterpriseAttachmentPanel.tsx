@@ -1,5 +1,6 @@
 import { Download, FileText, Upload } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "../context/ToastContext";
 import { buildAttachmentPreviewUrl, resolveAssetUrl } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import type { EnterpriseAttachmentRecord } from "../types";
@@ -22,6 +23,7 @@ export function EnterpriseAttachmentPanel({
   emptyMessage = "No attachments have been uploaded yet.",
   onUpload
 }: EnterpriseAttachmentPanelProps) {
+  const toast = useToast();
   const [attachmentType, setAttachmentType] = useState("Supporting Document");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [previewFile, setPreviewFile] = useState<{ title: string; fileName?: string; fileUrl: string } | null>(null);
@@ -34,6 +36,21 @@ export function EnterpriseAttachmentPanel({
     setAttachment(null);
     setAttachmentType("Supporting Document");
   };
+
+  const openPreview = (item: EnterpriseAttachmentRecord) => {
+    const fileUrl = buildAttachmentPreviewUrl(item.download_url, item.file);
+    if (!fileUrl) {
+      toast.error("Attachment preview is unavailable.");
+      return;
+    }
+    setPreviewFile({
+      title: item.attachment_type,
+      fileName: item.filename,
+      fileUrl
+    });
+  };
+
+  const getDownloadUrl = (item: EnterpriseAttachmentRecord) => resolveAssetUrl(item.download_url ?? item.file);
 
   return (
     <div className="space-y-4">
@@ -50,22 +67,22 @@ export function EnterpriseAttachmentPanel({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() =>
-                    setPreviewFile({
-                      title: item.attachment_type,
-                      fileName: item.filename,
-                      fileUrl: buildAttachmentPreviewUrl(item.download_url, item.file)
-                    })
-                  }
+                  onClick={() => openPreview(item)}
                   className="secondary-button rounded-md px-3 py-1.5 text-xs font-semibold"
                 >
                   <FileText className="h-3.5 w-3.5" />
                   Preview
                 </button>
                 <a
-                  href={resolveAssetUrl(item.download_url ?? item.file)}
+                  href={getDownloadUrl(item)}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={(event) => {
+                    if (!getDownloadUrl(item)) {
+                      event.preventDefault();
+                      toast.error("Attachment download is unavailable.");
+                    }
+                  }}
                   className="primary-button inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold"
                 >
                   <Download className="h-3.5 w-3.5" />

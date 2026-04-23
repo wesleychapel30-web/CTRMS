@@ -2,6 +2,7 @@ import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "../components/DataTable";
 import { InlineBanner } from "../components/FeedbackStates";
+import { useToast } from "../context/ToastContext";
 import { fetchDocuments, resolveAssetUrl } from "../lib/api";
 import { formatDateTime, sentenceCase } from "../lib/format";
 import type { DocumentRecord } from "../types";
@@ -11,6 +12,7 @@ function getErrorMessage(reason: unknown) {
 }
 
 export function DocumentsPage() {
+  const toast = useToast();
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,6 +41,16 @@ export function DocumentsPage() {
 
   const requestCount = documents.filter((item) => item.record_type === "request").length;
   const invitationCount = documents.filter((item) => item.record_type === "invitation").length;
+
+  const openDocument = (row: DocumentRecord) => {
+    const url = resolveAssetUrl(row.url);
+    if (!url) {
+      toast.error("Document link is unavailable.");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+    toast.info("Document opened.");
+  };
 
   return (
     <div className="space-y-4">
@@ -130,14 +142,13 @@ export function DocumentsPage() {
               key: "actions",
               label: "Action",
               render: (row) => (
-                <a
-                  href={resolveAssetUrl(row.url)}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => openDocument(row)}
                   className="secondary-button inline-flex rounded-md px-3 py-1.5 text-xs font-semibold"
                 >
                   Open
-                </a>
+                </button>
               )
             }
           ]}

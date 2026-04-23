@@ -4,7 +4,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { AuthLayout } from "../components/AuthLayout";
 import { InlineBanner } from "../components/FeedbackStates";
 import { useSession } from "../context/SessionContext";
-import { fetchPublicBranding } from "../lib/api";
+import { fetchPublicBranding, resolveAssetUrl } from "../lib/api";
 import type { BrandingSettings } from "../types";
 
 function getErrorMessage(reason: unknown) {
@@ -34,7 +34,7 @@ export function LoginPage() {
             link.rel = "icon";
             document.head.appendChild(link);
           }
-          link.href = payload.branding.favicon_url;
+          link.href = resolveAssetUrl(payload.branding.favicon_url);
         }
       })
       .catch(() => null);

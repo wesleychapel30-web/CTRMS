@@ -5,6 +5,7 @@ import { DetailSectionCard } from "../components/DetailSectionCard";
 import { InlineBanner, StatePanel } from "../components/FeedbackStates";
 import { SectionCard } from "../components/SectionCard";
 import { StatusBadge } from "../components/StatusBadge";
+import { useToast } from "../context/ToastContext";
 import {
   createBranch,
   createDepartment,
@@ -43,6 +44,7 @@ function getErrorMessage(reason: unknown) {
 }
 
 export function OrganizationPage() {
+  const toast = useToast();
   const [workspace, setWorkspace] = useState<OrganizationWorkspace | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,8 +102,11 @@ export function OrganizationPage() {
       const result = await updateOrganization(orgForm);
       setWorkspace((current) => current ? { ...current, organization: result.organization } : current);
       setEditingOrg(false);
+      toast.success("Organization settings saved.");
     } catch (reason) {
-      setOrgError(getErrorMessage(reason));
+      const message = getErrorMessage(reason);
+      setOrgError(message);
+      toast.error(message);
     } finally {
       setOrgSaving(false);
     }
@@ -130,14 +135,18 @@ export function OrganizationPage() {
         setWorkspace((current) =>
           current ? { ...current, departments: current.departments.map((d) => (d.id === editingDept.id ? result.department : d)) } : current
         );
+        toast.success("Department updated.");
       } else {
         const result = await createDepartment(deptForm);
         setWorkspace((current) => current ? { ...current, departments: [...current.departments, result.department] } : current);
+        toast.success("Department created.");
       }
       setShowDeptForm(false);
       setEditingDept(null);
     } catch (reason) {
-      setDeptError(getErrorMessage(reason));
+      const message = getErrorMessage(reason);
+      setDeptError(message);
+      toast.error(message);
     } finally {
       setDeptSaving(false);
     }
@@ -166,14 +175,18 @@ export function OrganizationPage() {
         setWorkspace((current) =>
           current ? { ...current, branches: current.branches.map((b) => (b.id === editingBranch.id ? result.branch : b)) } : current
         );
+        toast.success("Branch updated.");
       } else {
         const result = await createBranch(branchForm);
         setWorkspace((current) => current ? { ...current, branches: [...current.branches, result.branch] } : current);
+        toast.success("Branch created.");
       }
       setShowBranchForm(false);
       setEditingBranch(null);
     } catch (reason) {
-      setBranchError(getErrorMessage(reason));
+      const message = getErrorMessage(reason);
+      setBranchError(message);
+      toast.error(message);
     } finally {
       setBranchSaving(false);
     }
@@ -185,7 +198,9 @@ export function OrganizationPage() {
       await deleteDepartment(id);
       setWorkspace((current) => current ? { ...current, departments: current.departments.filter((d) => d.id !== id) } : current);
       setConfirmDeleteDeptId(null);
-    } catch {
+      toast.success("Department deleted.");
+    } catch (reason) {
+      toast.error(getErrorMessage(reason));
       // keep confirm open so user sees it didn't work
     } finally {
       setDeletingDeptId(null);
@@ -198,7 +213,9 @@ export function OrganizationPage() {
       await deleteBranch(id);
       setWorkspace((current) => current ? { ...current, branches: current.branches.filter((b) => b.id !== id) } : current);
       setConfirmDeleteBranchId(null);
-    } catch {
+      toast.success("Branch deleted.");
+    } catch (reason) {
+      toast.error(getErrorMessage(reason));
       // keep confirm open so user sees it didn't work
     } finally {
       setDeletingBranchId(null);

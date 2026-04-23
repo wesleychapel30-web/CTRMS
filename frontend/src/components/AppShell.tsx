@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { navItems } from "../config/navigation";
-import { fetchGlobalSearch, fetchNotifications, fetchPublicBranding, markNotificationRead } from "../lib/api";
+import { fetchGlobalSearch, fetchNotifications, fetchPublicBranding, markNotificationRead, resolveAssetUrl } from "../lib/api";
 import { Sidebar } from "./Sidebar";
 import { TopHeader } from "./TopHeader";
 import type { BrandingSettings, NotificationItem, SessionUser, ThemeMode } from "../types";
@@ -69,7 +69,7 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
             link.rel = "icon";
             document.head.appendChild(link);
           }
-          link.href = payload.branding.favicon_url;
+          link.href = resolveAssetUrl(payload.branding.favicon_url);
         }
       })
       .catch(() => null);

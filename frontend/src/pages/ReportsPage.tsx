@@ -5,12 +5,14 @@ import { InlineBanner, StatePanel } from "../components/FeedbackStates";
 import { FilterBar } from "../components/FilterBar";
 import { SectionCard } from "../components/SectionCard";
 import { useSession } from "../context/SessionContext";
-import { buildApiUrl, fetchRequestReport } from "../lib/api";
+import { downloadApiFile, fetchRequestReport } from "../lib/api";
+import { useToast } from "../context/ToastContext";
 import { formatCurrency } from "../lib/format";
 import type { ChartDatum, RequestReportSummary } from "../types";
 
 export function ReportsPage() {
   const { hasPermission } = useSession();
+  const toast = useToast();
   const [report, setReport] = useState<RequestReportSummary | null>(null);
   const [trendData, setTrendData] = useState<ChartDatum[]>([]);
   const [approvalRate, setApprovalRate] = useState<ChartDatum[]>([]);
@@ -20,6 +22,7 @@ export function ReportsPage() {
   const [toDate, setToDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [exportingType, setExportingType] = useState<"excel" | "pdf" | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -56,9 +59,22 @@ export function ReportsPage() {
   if (fromDate) exportParams.set("created_at__gte", new Date(`${fromDate}T00:00:00`).toISOString());
   if (toDate) exportParams.set("created_at__lte", new Date(`${toDate}T23:59:59.999`).toISOString());
   const exportSuffix = exportParams.toString() ? `?${exportParams.toString()}` : "";
-  const excelExportUrl = buildApiUrl(`/export/requests-excel/${exportSuffix}`);
-  const pdfExportUrl = buildApiUrl(`/export/requests-pdf/${exportSuffix}`);
   const canExport = hasPermission("report:export");
+
+  const handleExport = async (type: "excel" | "pdf") => {
+    setExportingType(type);
+    try {
+      const filename = await downloadApiFile(
+        `/export/requests-${type}/${exportSuffix}`,
+        `request-report.${type === "excel" ? "xlsx" : "pdf"}`
+      );
+      toast.success(`${filename} downloaded.`, "Export complete");
+    } catch (reason: unknown) {
+      toast.error(reason instanceof Error ? reason.message : "Export failed");
+    } finally {
+      setExportingType(null);
+    }
+  };
 
   if (error && !report) {
     return <StatePanel variant="error" title="Reports unavailable" message={error} />;
@@ -75,14 +91,24 @@ export function ReportsPage() {
         action={
           canExport ? (
             <div className="flex gap-2">
-              <a href={excelExportUrl} className="inline-flex items-center gap-2 rounded-sm bg-[var(--surface-low)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]">
+              <button
+                type="button"
+                onClick={() => void handleExport("excel")}
+                disabled={exportingType !== null}
+                className="inline-flex items-center gap-2 rounded-sm bg-[var(--surface-low)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-60"
+              >
                 <Download className="h-3.5 w-3.5" />
-                Export Excel
-              </a>
-              <a href={pdfExportUrl} className="primary-button inline-flex items-center gap-2 rounded-sm px-3 py-1.5 text-xs font-semibold">
+                {exportingType === "excel" ? "Exporting..." : "Export Excel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleExport("pdf")}
+                disabled={exportingType !== null}
+                className="primary-button inline-flex items-center gap-2 rounded-sm px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+              >
                 <Download className="h-3.5 w-3.5" />
-                Export PDF
-              </a>
+                {exportingType === "pdf" ? "Exporting..." : "Export PDF"}
+              </button>
             </div>
           ) : null
         }

@@ -7,7 +7,8 @@ import { FilterBar } from "../components/FilterBar";
 import { SectionCard } from "../components/SectionCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useSession } from "../context/SessionContext";
-import { buildApiUrl, fetchRequests } from "../lib/api";
+import { useToast } from "../context/ToastContext";
+import { downloadApiFile, fetchRequests } from "../lib/api";
 import { formatCurrency, formatDate } from "../lib/format";
 import type { RequestRecord } from "../types";
 
@@ -21,6 +22,7 @@ const requestCategoryOptions = [
 
 export function RequestsPage() {
   const { hasPermission } = useSession();
+  const toast = useToast();
   const [rows, setRows] = useState<RequestRecord[]>([]);
   const [count, setCount] = useState(0);
   const [searchInput, setSearchInput] = useState("");
@@ -31,6 +33,7 @@ export function RequestsPage() {
   const [ordering, setOrdering] = useState("-created_at");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [exportingType, setExportingType] = useState<"excel" | "pdf" | null>(null);
   const deferredSearchInput = useDeferredValue(searchInput);
 
   const loadRequests = () => {
@@ -89,10 +92,22 @@ export function RequestsPage() {
   if (status) exportParams.set("status", status);
   if (category) exportParams.set("category", category);
   const exportSuffix = exportParams.toString() ? `?${exportParams.toString()}` : "";
-  const excelExportUrl = buildApiUrl(`/export/requests-excel/${exportSuffix}`);
-  const pdfExportUrl = buildApiUrl(`/export/requests-pdf/${exportSuffix}`);
   const canExport = hasPermission("report:export");
   const canCreateRequest = hasPermission("request:create");
+  const handleExport = async (type: "excel" | "pdf") => {
+    setExportingType(type);
+    try {
+      const filename = await downloadApiFile(
+        `/export/requests-${type}/${exportSuffix}`,
+        `requests.${type === "excel" ? "xlsx" : "pdf"}`
+      );
+      toast.success(`${filename} downloaded.`, "Export complete");
+    } catch (reason: unknown) {
+      toast.error(reason instanceof Error ? reason.message : "Export failed");
+    } finally {
+      setExportingType(null);
+    }
+  };
   const isSearchSyncing = searchInput.trim() !== search;
   const activeFilters = useMemo(() => {
     const filters: Array<{ key: string; label: string }> = [];
@@ -125,14 +140,24 @@ export function RequestsPage() {
               </Link>
             ) : null}
             {canExport ? (
-              <a href={excelExportUrl} className="rounded-sm bg-[var(--surface-low)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">
-                Export Excel
-              </a>
+              <button
+                type="button"
+                onClick={() => void handleExport("excel")}
+                disabled={exportingType !== null}
+                className="rounded-sm bg-[var(--surface-low)] px-4 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-60"
+              >
+                {exportingType === "excel" ? "Exporting..." : "Export Excel"}
+              </button>
             ) : null}
             {canExport ? (
-              <a href={pdfExportUrl} className="primary-button rounded-sm px-4 py-2 text-sm font-semibold">
-                Export PDF
-              </a>
+              <button
+                type="button"
+                onClick={() => void handleExport("pdf")}
+                disabled={exportingType !== null}
+                className="primary-button rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              >
+                {exportingType === "pdf" ? "Exporting..." : "Export PDF"}
+              </button>
             ) : null}
           </div>
         ) : undefined}

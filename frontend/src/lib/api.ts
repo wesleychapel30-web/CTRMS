@@ -127,6 +127,39 @@ export function buildApiUrl(path: string) {
   return `${base}${normalizedPath}`;
 }
 
+function getDownloadFilename(response: Response, fallbackFilename: string) {
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const encodedMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encodedMatch?.[1]) {
+    return decodeURIComponent(encodedMatch[1].trim());
+  }
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1]?.trim() || fallbackFilename;
+}
+
+export async function downloadApiFile(path: string, fallbackFilename: string) {
+  const response = await fetch(buildApiUrl(path), {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const data = contentType.includes("application/json") ? await response.json() : await response.text();
+    throw new ApiError(getApiErrorMessage(data, response.status), response.status);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = getDownloadFilename(response, fallbackFilename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  return link.download;
+}
+
 export function resolveAssetUrl(path?: string | null) {
   if (!path) {
     return "";

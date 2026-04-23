@@ -1,5 +1,6 @@
 import { Download, FileText, X } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useToast } from "../context/ToastContext";
 
 type AttachmentPreviewPanelProps = {
   isOpen: boolean;
@@ -17,6 +18,7 @@ function detectFileType(url: string, fileName?: string) {
 }
 
 export function AttachmentPreviewPanel({ isOpen, title, fileName, fileUrl, onClose }: AttachmentPreviewPanelProps) {
+  const toast = useToast();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -94,6 +96,7 @@ export function AttachmentPreviewPanel({ isOpen, title, fileName, fileUrl, onClo
             <img
               src={fileUrl}
               alt={fileName || title}
+              onError={() => toast.error("File preview failed.")}
               className="h-auto w-full rounded-lg object-contain"
             />
           ) : null}
@@ -101,6 +104,7 @@ export function AttachmentPreviewPanel({ isOpen, title, fileName, fileUrl, onClo
             <iframe
               src={fileUrl}
               title={fileName || title}
+              onError={() => toast.error("PDF preview failed.")}
               className="h-full min-h-[72vh] w-full rounded-lg border border-[var(--line)]"
             />
           ) : null}
