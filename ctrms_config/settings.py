@@ -213,8 +213,15 @@ if not DEBUG:
 
 # Media files
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-SERVE_MEDIA = env_bool('SERVE_MEDIA', default=DEBUG)
+configured_media_root = str(config('MEDIA_ROOT', default='')).strip()
+render_disk_path = str(config('RENDER_DISK_PATH', default='')).strip()
+if configured_media_root:
+    MEDIA_ROOT = Path(configured_media_root)
+elif render_disk_path:
+    MEDIA_ROOT = Path(render_disk_path) / 'media'
+else:
+    MEDIA_ROOT = BASE_DIR / 'media'
+SERVE_MEDIA = env_bool('SERVE_MEDIA', default=True)
 FRONTEND_DIST_ROOT = BASE_DIR / 'frontend' / 'dist'
 FRONTEND_ASSETS_ROOT = FRONTEND_DIST_ROOT / 'assets'
 
@@ -412,4 +419,4 @@ except Exception:
 
 # Create logs directory if it doesn't exist
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
-os.makedirs(BASE_DIR / 'media', exist_ok=True)
+os.makedirs(MEDIA_ROOT, exist_ok=True)

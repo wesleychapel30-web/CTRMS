@@ -615,12 +615,26 @@ function ToggleField({
 
 function AssetTile({ label, url }: { label: string; url?: string }) {
   const resolvedUrl = resolveAssetUrl(url);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [resolvedUrl]);
 
   return (
     <div className="rounded-xl bg-[var(--surface-low)] p-4">
       <p className="section-kicker">{label}</p>
       <div className="mt-4 grid min-h-[10rem] place-items-center rounded-lg bg-[var(--surface-card)] p-4">
-        {resolvedUrl ? <img src={resolvedUrl} alt={label} className="max-h-28 w-auto object-contain" /> : <span className="text-sm text-[var(--muted)]">Not set</span>}
+        {resolvedUrl && !loadFailed ? (
+          <img
+            src={resolvedUrl}
+            alt={label}
+            onError={() => setLoadFailed(true)}
+            className="max-h-28 w-auto object-contain"
+          />
+        ) : (
+          <span className="text-sm text-[var(--muted)]">{resolvedUrl ? "Preview unavailable" : "Not set"}</span>
+        )}
       </div>
     </div>
   );

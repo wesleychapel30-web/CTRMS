@@ -1,4 +1,5 @@
 import { Building2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { resolveAssetUrl } from "../lib/api";
 import type { BrandingSettings, NavItem, SessionUser } from "../types";
@@ -61,6 +62,11 @@ export function Sidebar({ items, user, branding, onLogout, isOpen, onClose }: Si
   const primaryVisibleRole = prioritizedRoles.find((role) => roleKeys.includes(role)) ?? user?.role ?? "";
   const userRoleLabel = roleLabelMap[primaryVisibleRole] ?? "User";
   const logoUrl = resolveAssetUrl(branding?.logo_url);
+  const [logoFailed, setLogoFailed] = useState(false);
+
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [logoUrl]);
 
   return (
     <>
@@ -77,8 +83,13 @@ export function Sidebar({ items, user, branding, onLogout, isOpen, onClose }: Si
           <div className="px-4 py-4">
             <div className="flex items-center gap-3">
               <div className="grid h-12 w-12 flex-shrink-0 place-items-center overflow-hidden rounded-xl bg-white p-1.5 text-[var(--accent)] shadow-[0_0_0_1px_rgba(255,255,255,0.28),0_10px_24px_rgba(0,0,0,0.22)]">
-                {logoUrl ? (
-                  <img src={logoUrl} alt={branding?.organization_name ?? "CTRMS"} className="max-h-full max-w-full object-contain" />
+                {logoUrl && !logoFailed ? (
+                  <img
+                    src={logoUrl}
+                    alt={branding?.organization_name ?? "CTRMS"}
+                    onError={() => setLogoFailed(true)}
+                    className="max-h-full max-w-full object-contain"
+                  />
                 ) : (
                   <Building2 className="h-5 w-5" />
                 )}

@@ -67,6 +67,17 @@ def _notify_role_keys(*, role_keys: list[str], title: str, message: str, href: s
     )
 
 
+def _notify_specific_users(*, recipients: list, title: str, message: str, href: str | None, created_by=None) -> None:
+    active_recipients = {user.id: user for user in recipients if user and getattr(user, "is_active", False)}
+    if not active_recipients:
+        return
+    notify_users(
+        recipients=active_recipients.values(),
+        payload=NotificationPayload(kind="event", title=title, message=message, href=href),
+        created_by=created_by,
+    )
+
+
 def _coerce_decimal(value, *, default: str = "0.00") -> Decimal:
     if value is None or value == "":
         return Decimal(default)
@@ -283,6 +294,13 @@ def approve_procurement_request(procurement_request: ProcurementRequest, *, acto
         if procurement_request.budget_account_id:
             procurement_request.budget_account.committed_amount += procurement_request.total_amount
             procurement_request.budget_account.save(update_fields=["committed_amount", "updated_at"])
+        _notify_specific_users(
+            recipients=[procurement_request.requested_by],
+            title="Procurement request approved",
+            message=f"{procurement_request.request_number} was approved and is ready for procurement processing.",
+            href="/procurement",
+            created_by=actor,
+        )
 
     _record_audit(
         actor=actor,
@@ -325,6 +343,13 @@ def reject_procurement_request(procurement_request: ProcurementRequest, *, actor
         object_id=str(procurement_request.id),
         description=f"Rejected procurement request {procurement_request.request_number}.",
     )
+    _notify_specific_users(
+        recipients=[procurement_request.requested_by],
+        title="Procurement request rejected",
+        message=f"{procurement_request.request_number} was rejected.",
+        href="/procurement",
+        created_by=actor,
+    )
     return procurement_request
 
 
@@ -354,6 +379,13 @@ def revert_procurement_request_approval(procurement_request: ProcurementRequest,
         object_id=str(procurement_request.id),
         description=description,
     )
+    _notify_specific_users(
+        recipients=[procurement_request.requested_by],
+        title="Procurement decision reverted",
+        message=f"{procurement_request.request_number} returned to review.",
+        href="/procurement",
+        created_by=actor,
+    )
     return procurement_request
 
 
@@ -372,6 +404,13 @@ def add_procurement_request_approval_comment(procurement_request: ProcurementReq
         content_type="ProcurementRequest",
         object_id=str(procurement_request.id),
         description=f"Logged approval comment for procurement request {procurement_request.request_number}.",
+    )
+    _notify_specific_users(
+        recipients=[procurement_request.requested_by],
+        title="Procurement comment added",
+        message=f"A comment was added to {procurement_request.request_number}.",
+        href="/procurement",
+        created_by=actor,
     )
     return procurement_request
 
@@ -427,6 +466,13 @@ def convert_procurement_request_to_purchase_order(
         object_id=str(purchase_order.id),
         description=f"Created purchase order {purchase_order.po_number} from {procurement_request.request_number}.",
     )
+    _notify_specific_users(
+        recipients=[procurement_request.requested_by],
+        title="Purchase order created",
+        message=f"{procurement_request.request_number} was converted to {purchase_order.po_number}.",
+        href="/procurement",
+        created_by=actor,
+    )
     return purchase_order
 
 
@@ -444,6 +490,13 @@ def issue_purchase_order(purchase_order: PurchaseOrder, *, actor) -> PurchaseOrd
         content_type="PurchaseOrder",
         object_id=str(purchase_order.id),
         description=f"Issued purchase order {purchase_order.po_number}.",
+    )
+    _notify_specific_users(
+        recipients=[purchase_order.procurement_request.requested_by],
+        title="Purchase order issued",
+        message=f"{purchase_order.po_number} has been issued.",
+        href="/procurement",
+        created_by=actor,
     )
     return purchase_order
 
@@ -547,6 +600,13 @@ def receive_purchase_order(
         role_keys=["finance_officer", "admin"],
         title="Goods receipt posted",
         message=f"{receipt.receipt_number} updated inventory and finance staging for {purchase_order.po_number}.",
+        href="/inventory",
+        created_by=actor,
+    )
+    _notify_specific_users(
+        recipients=[purchase_order.procurement_request.requested_by],
+        title="Goods receipt posted",
+        message=f"{purchase_order.po_number} receipt was recorded.",
         href="/inventory",
         created_by=actor,
     )
@@ -899,6 +959,13 @@ def mark_payment_request_paid(payment_request: PaymentRequest, *, actor, payment
         role_keys=["admin", "finance_officer"],
         title="Payment completed",
         message=f"{payment_request.payment_request_number} has been paid and the budget ledger was updated.",
+        href="/finance",
+        created_by=actor,
+    )
+    _notify_specific_users(
+        recipients=[invoice.purchase_order.procurement_request.requested_by],
+        title="Payment completed",
+        message=f"Payment for {invoice.purchase_order.procurement_request.request_number} was completed.",
         href="/finance",
         created_by=actor,
     )

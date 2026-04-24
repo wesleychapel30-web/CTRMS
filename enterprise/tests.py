@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import os
+import shutil
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase, override_settings
+from django.urls import reverse
 
 from core.models import RoleDefinition, User
 from core.rbac_defaults import seed_rbac_defaults
@@ -15,6 +19,7 @@ from .models import (
     Branch,
     BudgetAccount,
     Department,
+    EnterpriseAttachment,
     Organization,
     ProcurementRequest,
     ProcurementRequestLine,
@@ -80,6 +85,10 @@ class EnterpriseBootstrapCommandTests(TestCase):
 class EnterpriseWorkflowTests(TestCase):
     def setUp(self):
         seed_rbac_defaults(sync_role_permissions=True)
+        self.media_root = os.path.join(os.getcwd(), 'test_media_enterprise')
+        shutil.rmtree(self.media_root, ignore_errors=True)
+        os.makedirs(self.media_root, exist_ok=True)
+        self.addCleanup(lambda: shutil.rmtree(self.media_root, ignore_errors=True))
         self.actor = User.objects.create_user(
             username="opsadmin",
             password="StrongPass123!",
@@ -491,3 +500,25 @@ class EnterpriseWorkflowTests(TestCase):
         assert instance is not None
         self.assertEqual(instance.status, ApprovalInstance.Status.PENDING)
         self.assertIn("Approval comment added", list(instance.history_entries.values_list("title", flat=True)))
+
+    def test_enterprise_attachment_download_returns_404_when_file_is_missing(self):
+        with override_settings(MEDIA_ROOT=self.media_root):
+            procurement_request = self._build_request(quantity=Decimal("1.00"), unit_price=Decimal("25000.00"))
+            attachment = EnterpriseAttachment.objects.create(
+                organization=self.organization,
+                target_type=EnterpriseAttachment.TargetType.PROCUREMENT_REQUEST,
+                target_id=procurement_request.id,
+                file=SimpleUploadedFile('missing.pdf', b'%PDF-1.4 missing', content_type='application/pdf'),
+                attachment_type='Supporting Document',
+                uploaded_by=self.actor,
+            )
+            attachment.file.storage.delete(attachment.file.name)
+
+            client = Client()
+            client.force_login(self.actor)
+            response = client.get(reverse('api_enterprise_attachment_download', args=[attachment.id]))
+
+            self.assertEqual(response.status_code, 404)
+            payload = response.json()
+            self.assertFalse(payload['success'])
+            self.assertEqual(payload['error'], 'Attachment file is missing from storage.')

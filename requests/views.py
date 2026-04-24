@@ -1435,7 +1435,13 @@ class RequestDocumentViewSet(viewsets.ReadOnlyModelViewSet):
     def download(self, request, pk=None):
         """Download a document"""
         document = self.get_object()
-        file = document.document.open('rb')
+        try:
+            file = document.document.open('rb')
+        except FileNotFoundError:
+            return Response(
+                {'error': 'Document file is missing from storage.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         filename = (document.document.name or '').split('/')[-1]
         inline = request.query_params.get('disposition') == 'inline'
         response = FileResponse(

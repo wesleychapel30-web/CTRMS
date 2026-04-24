@@ -758,7 +758,13 @@ class InvitationAttachmentViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
         attachment = self.get_object()
-        file = attachment.file.open("rb")
+        try:
+            file = attachment.file.open("rb")
+        except FileNotFoundError:
+            return Response(
+                {'error': 'Attachment file is missing from storage.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         filename = (attachment.file.name or "").split("/")[-1]
         inline = request.query_params.get("disposition") == "inline"
         response = FileResponse(

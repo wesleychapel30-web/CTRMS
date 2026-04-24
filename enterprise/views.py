@@ -1609,7 +1609,10 @@ def enterprise_attachment_download_api(request, attachment_id):
     if not _user_can_access_enterprise_attachment(request.user, attachment):
         return _json_error("You do not have permission to access this attachment.", status=403)
 
-    file = attachment.file.open("rb")
+    try:
+        file = attachment.file.open("rb")
+    except FileNotFoundError:
+        return _json_error("Attachment file is missing from storage.", status=404)
     filename = (attachment.file.name or "").split("/")[-1]
     inline = request.GET.get("disposition") == "inline"
     response = FileResponse(file, as_attachment=not inline, filename=filename)

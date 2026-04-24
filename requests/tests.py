@@ -242,6 +242,41 @@ class RequestWorkflowTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn('inline;', response['Content-Disposition'])
 
+    def test_request_document_download_returns_404_when_file_is_missing(self):
+        with override_settings(MEDIA_ROOT=self.media_root):
+            director = User.objects.create_user(
+                username='director-missing-request-file',
+                password='StrongPass1',
+                email='director-missing-request-file@example.com',
+                role=User.Role.DIRECTOR,
+                is_staff=True,
+            )
+            request_obj = Request.objects.create(
+                applicant_name='Missing Preview User',
+                applicant_email='missing-preview@example.com',
+                applicant_phone='0711111111',
+                applicant_id='ID-202',
+                address='CBD',
+                category=Request.Category.MEDICAL,
+                description='Medical support',
+                amount_requested=5000,
+                created_by=director,
+            )
+            document = RequestDocument.objects.create(
+                request=request_obj,
+                document=SimpleUploadedFile('missing.pdf', b'%PDF-1.4 missing', content_type='application/pdf'),
+                document_type='Invoice',
+                uploaded_by=director,
+            )
+            document.document.storage.delete(document.document.name)
+
+            api_client = Client()
+            api_client.force_login(director)
+            response = api_client.get(reverse('document-download', args=[document.pk]))
+
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json()['error'], 'Document file is missing from storage.')
+
     def test_admin_cannot_approve_even_with_request_approve_permission(self):
         request_obj = Request.objects.create(
             applicant_name='Case User',

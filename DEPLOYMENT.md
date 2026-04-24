@@ -162,6 +162,9 @@ ghcr.io/<repository-owner>/ctrms:latest
 - Static files are collected into `staticfiles/`
 - Uploaded documents live under `media/`
 - `docker-compose.prod.yml` keeps both in persistent named volumes
+- On Render, mount a persistent disk and set `MEDIA_ROOT` to that mount path plus `/media`
+  Example: disk mounted at `/var/data` -> `MEDIA_ROOT=/var/data/media`
+- Keep `SERVE_MEDIA=True` if Django is serving uploaded files directly
 - For larger deployments, put `/media/` behind Nginx or object storage instead of serving directly from Django
 
 ## 8. Optional reverse proxy

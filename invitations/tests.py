@@ -129,6 +129,41 @@ class InvitationWorkflowTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn('inline;', response['Content-Disposition'])
 
+    def test_attachment_download_returns_404_when_file_is_missing(self):
+        with override_settings(MEDIA_ROOT=self.media_root):
+            director = User.objects.create_user(
+                username='director-missing-invitation-file',
+                password='StrongPass1',
+                email='director-missing-invitation-file@example.com',
+                role=User.Role.DIRECTOR,
+                is_staff=True,
+            )
+            invitation = Invitation.objects.create(
+                inviting_organization='Institution',
+                event_title='Missing Attachment Forum',
+                description='Official invitation',
+                location='Main Hall',
+                event_date=timezone.now() + timedelta(days=5),
+                contact_person='Protocol Officer',
+                contact_email='protocol@example.com',
+                contact_phone='0700000000',
+                created_by=director,
+            )
+            attachment = InvitationAttachment.objects.create(
+                invitation=invitation,
+                file=SimpleUploadedFile('missing.pdf', b'%PDF-1.4 missing', content_type='application/pdf'),
+                attachment_type='Invitation Letter',
+                uploaded_by=director,
+            )
+            attachment.file.storage.delete(attachment.file.name)
+
+            api_client = Client()
+            api_client.force_login(director)
+            response = api_client.get(reverse('invitation-attachment-download', args=[attachment.pk]))
+
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json()['error'], 'Attachment file is missing from storage.')
+
     def test_calendar_endpoint_returns_events_for_selected_month(self):
         admin_user = User.objects.create_user(
             username='calendar-admin',

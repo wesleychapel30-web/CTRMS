@@ -1,5 +1,5 @@
 import { Download, FileText, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "../context/ToastContext";
 
 type AttachmentPreviewPanelProps = {
@@ -21,6 +21,11 @@ export function AttachmentPreviewPanel({ isOpen, title, fileName, fileUrl, onClo
   const toast = useToast();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
+
+  useEffect(() => {
+    setPreviewFailed(false);
+  }, [fileUrl, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -92,29 +97,37 @@ export function AttachmentPreviewPanel({ isOpen, title, fileName, fileUrl, onClo
 
         {/* Preview area */}
         <div className="min-h-0 flex-1 overflow-auto rounded-none bg-[var(--surface-low)] p-4">
-          {fileType === "image" ? (
+          {fileType === "image" && !previewFailed ? (
             <img
               src={fileUrl}
               alt={fileName || title}
-              onError={() => toast.error("File preview failed.")}
+              onError={() => {
+                setPreviewFailed(true);
+                toast.error("File preview failed.");
+              }}
               className="h-auto w-full rounded-lg object-contain"
             />
           ) : null}
-          {fileType === "pdf" ? (
+          {fileType === "pdf" && !previewFailed ? (
             <iframe
               src={fileUrl}
               title={fileName || title}
-              onError={() => toast.error("PDF preview failed.")}
+              onError={() => {
+                setPreviewFailed(true);
+                toast.error("PDF preview failed.");
+              }}
               className="h-full min-h-[72vh] w-full rounded-lg border border-[var(--line)]"
             />
           ) : null}
-          {fileType === "other" ? (
+          {fileType === "other" || previewFailed ? (
             <div className="grid h-full min-h-48 place-items-center text-center">
               <div>
                 <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[var(--surface-container)] text-[var(--muted)]">
                   <FileText className="h-5 w-5" />
                 </div>
-                <p className="text-sm text-[var(--muted)]">Preview is not available for this file type.</p>
+                <p className="text-sm text-[var(--muted)]">
+                  {previewFailed ? "Preview unavailable for this file right now." : "Preview is not available for this file type."}
+                </p>
               </div>
             </div>
           ) : null}

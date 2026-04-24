@@ -32,7 +32,6 @@ urlpatterns = [
     re_path(r'^(?!api/|admin/|media/|static/|assets/|export/).*$' , FrontendAppView.as_view(), name='frontend_app'),
 ]
 
-# Serve media files in development (and optionally in simple deployments)
+# Serve uploaded media files when configured. Static assets are handled by WhiteNoise.
 if settings.SERVE_MEDIA:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
