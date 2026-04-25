@@ -7,6 +7,7 @@ import type {
   DashboardOverview,
   DocumentRecord,
   EnterpriseOverview,
+  EnterpriseProduct,
   FinanceWorkspace,
   InvitationRecord,
   InventoryWorkspace,
