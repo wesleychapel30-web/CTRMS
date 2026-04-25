@@ -4,6 +4,8 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock3,
+  MessageSquare,
+  RotateCcw,
   Wallet,
   XCircle,
   type LucideIcon,
@@ -15,7 +17,14 @@ export const ACTIONABLE_NOTIFICATION_TITLES = new Set([
   "Pending approval",
   "Request approved",
   "Request rejected",
+  "Request cancelled",
+  "Request restored",
+  "Request reversed",
+  "Comment added",
   "Payment recorded",
+  "Payment pending",
+  "Finance query",
+  "Clarification needed",
   "Invitation response",
   "Event reminder",
   "Overdue item",
@@ -47,6 +56,18 @@ export function getNotificationMeta(item: NotificationItem): NotificationMeta {
   if (title.includes("pending")) {
     return { icon: Clock3, accent: "text-sky-700 dark:text-sky-300", fallbackTitle: "Pending approval" };
   }
+  if (title.includes("cancelled")) {
+    return { icon: XCircle, accent: "text-slate-500 dark:text-slate-400", fallbackTitle: "Request cancelled" };
+  }
+  if (title.includes("reversed") || title.includes("restored")) {
+    return { icon: RotateCcw, accent: "text-violet-600 dark:text-violet-300", fallbackTitle: "Decision reversed" };
+  }
+  if (title.includes("comment")) {
+    return { icon: MessageSquare, accent: "text-sky-600 dark:text-sky-300", fallbackTitle: "Comment added" };
+  }
+  if (title.includes("clarification") || title.includes("query") || title.includes("finance")) {
+    return { icon: AlertTriangle, accent: "text-amber-600 dark:text-amber-300", fallbackTitle: "Action needed" };
+  }
   if (title.includes("overdue")) {
     return { icon: AlertTriangle, accent: "text-amber-700 dark:text-amber-300", fallbackTitle: "Overdue item" };
   }
@@ -63,4 +84,25 @@ export function filterEssentialNotifications(notifications: NotificationItem[]) 
     }
     return ACTIONABLE_NOTIFICATION_TITLES.has(item.title);
   });
+}
+
+export function requestDesktopPermission(): void {
+  if (!("Notification" in window) || Notification.permission !== "default") return;
+  void Notification.requestPermission();
+}
+
+export function fireDesktopNotification(title: string, body: string, href?: string | null): void {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const n = new Notification(title, { body, icon: "/favicon.ico", tag: title });
+    if (href) {
+      n.onclick = () => {
+        window.focus();
+        window.location.href = href;
+        n.close();
+      };
+    }
+  } catch {
+    // Silently ignore — some browsers restrict even with permission granted
+  }
 }

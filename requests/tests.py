@@ -99,7 +99,7 @@ class RequestWorkflowTests(TestCase):
         self.assertEqual(request_obj.applicant_organization, 'Example School')
         self.assertEqual(request_obj.number_of_beneficiaries, 25)
 
-    def test_staff_cannot_create_request(self):
+    def test_staff_can_create_request(self):
         staff = User.objects.create_user(
             username='staff-creator',
             email='staff-creator@example.com',
@@ -113,18 +113,20 @@ class RequestWorkflowTests(TestCase):
         response = client.post(
             reverse('request-list'),
             json.dumps({
-                'applicant_name': 'Blocked Staff',
-                'applicant_email': 'blocked@example.com',
+                'applicant_name': 'Staff Requester',
+                'applicant_email': 'staff-requester@example.com',
                 'applicant_phone': '0712345678',
                 'address': 'Nairobi',
                 'category': Request.Category.OTHER,
-                'description': 'Should be blocked',
+                'description': 'Operational request',
                 'amount_requested': '1000',
             }),
             content_type='application/json',
         )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 201)
+        request_obj = Request.objects.get(applicant_email='staff-requester@example.com')
+        self.assertEqual(request_obj.created_by, staff)
 
     def test_director_can_approve_mark_paid_and_upload_document_via_api(self):
         with override_settings(MEDIA_ROOT=self.media_root):
@@ -171,7 +173,7 @@ class RequestWorkflowTests(TestCase):
             self.assertEqual(approve_response.status_code, 200)
 
             request_obj.refresh_from_db()
-            self.assertEqual(request_obj.status, Request.Status.APPROVED)
+            self.assertEqual(request_obj.status, Request.Status.DIRECTOR_APPROVED)
             self.assertEqual(float(request_obj.approved_amount), 3500.0)
 
             upload_response = api_client.post(

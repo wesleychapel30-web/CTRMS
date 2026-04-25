@@ -74,8 +74,8 @@ class OrganizationSettings(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
     # Branding
-    organization_name = models.CharField(max_length=255, default='Chakou Trust')
-    organization_slug = models.SlugField(unique=True, default='chakou-trust')
+    organization_name = models.CharField(max_length=255, default='')
+    organization_slug = models.SlugField(unique=True, default='organization')
     organization_email = models.EmailField()
     organization_phone = models.CharField(max_length=20, blank=True)
     organization_address = models.TextField(blank=True)

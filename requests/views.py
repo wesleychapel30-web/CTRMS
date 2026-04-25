@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 from .models import Request, RequestDocument, RequestHistory
 from core.models import AuditLog, User
 from core.notification_center import NotificationPayload, get_recipients_for_roles, notify_users
+from core.notifications import EmailNotificationService
 from core.rbac import drf_any_permission_required, drf_permission_required, user_has_permission, user_has_role
 from core.timeline import can_compose_timeline_entry, create_record_comment, create_request_timeline_entry
 from .services import suggest_request_category
@@ -52,6 +53,10 @@ def _notification_recipients_for_request(request_obj: Request, role_keys):
     return recipients
 
 
+def _has_primary_role(user, role_key: str) -> bool:
+    return bool(role_key and (getattr(user, "role", "") or "").strip() == role_key)
+
+
 REQUEST_EDITABLE_STATUSES = {
     Request.Status.DRAFT,
     Request.Status.PENDING,
@@ -85,9 +90,12 @@ REQUEST_ALLOWED_TRANSITIONS = {
         Request.Status.CANCELLED,
     },
     Request.Status.DIRECTOR_APPROVED: {
+        Request.Status.UNDER_REVIEW,
         Request.Status.FINANCE_PROCESSING,
         # Inventory route ends here
         Request.Status.APPROVED,
+        Request.Status.PARTIALLY_PAID,
+        Request.Status.PAID,
         Request.Status.CANCELLED,
     },
     Request.Status.DIRECTOR_REJECTED: {
@@ -97,6 +105,8 @@ REQUEST_ALLOWED_TRANSITIONS = {
     Request.Status.FINANCE_PROCESSING: {
         Request.Status.FINANCE_QUERY,
         Request.Status.PENDING_PAYMENT,
+        Request.Status.PARTIALLY_PAID,
+        Request.Status.PAID,
         Request.Status.CANCELLED,
     },
     Request.Status.FINANCE_QUERY: {
@@ -334,6 +344,10 @@ class RequestViewSet(viewsets.ModelViewSet):
                     ),
                     created_by=request.user,
                 )
+            try:
+                EmailNotificationService.send_request_submitted(request_obj)
+            except Exception:
+                logger.exception("Email send_request_submitted failed for %s", request_obj.request_id)
 
         output_serializer = RequestSerializer(request_obj, context={"request": request})
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
@@ -445,6 +459,11 @@ class RequestViewSet(viewsets.ModelViewSet):
                 created_by=request.user,
             )
 
+        try:
+            EmailNotificationService.send_request_submitted(request_obj)
+        except Exception:
+            logger.exception("Email send_request_submitted failed for %s", request_obj.request_id)
+
         return Response(RequestSerializer(request_obj, context={"request": request}).data)
 
     @action(detail=True, methods=['post'])
@@ -503,7 +522,7 @@ class RequestViewSet(viewsets.ModelViewSet):
     def approve_request(self, request, pk=None):
         """Director approves a request. Routes to Finance queue (normal_funded) or final approval (inventory)."""
         request_obj = self.get_object()
-        if not user_has_role(request.user, User.Role.DIRECTOR):
+        if not _has_primary_role(request.user, User.Role.DIRECTOR):
             return Response({'error': 'Only Directors can approve requests.'}, status=status.HTTP_403_FORBIDDEN)
 
         # Determine target status by route
@@ -524,7 +543,8 @@ class RequestViewSet(viewsets.ModelViewSet):
         )
 
         history_action = RequestHistory.Action.APPROVED if is_inventory else RequestHistory.Action.DIRECTOR_APPROVED
-        title = "Request approved" if is_inventory else "Director approved — forwarded to Finance"
+        title = "Request approved" if is_inventory else "Director approved - forwarded to Finance"
+        notification_title = "Request approved"
         _create_history_entry(
             request_obj=request_obj,
             action=history_action,
@@ -556,12 +576,17 @@ class RequestViewSet(viewsets.ModelViewSet):
             recipients=_notification_recipients_for_request(request_obj, notify_roles),
             payload=NotificationPayload(
                 kind="event",
-                title=title,
+                title=notification_title,
                 message=f"{request_obj.request_id} approved by Director.",
                 href=f"/requests/{request_obj.id}",
             ),
             created_by=request.user,
         )
+
+        try:
+            EmailNotificationService.send_request_approved(request_obj)
+        except Exception:
+            logger.exception("Email send_request_approved failed for %s", request_obj.request_id)
 
         return Response(RequestSerializer(request_obj, context={"request": request}).data)
 
@@ -570,7 +595,7 @@ class RequestViewSet(viewsets.ModelViewSet):
     def reject_request(self, request, pk=None):
         """Director rejects a request."""
         request_obj = self.get_object()
-        if not user_has_role(request.user, User.Role.DIRECTOR):
+        if not _has_primary_role(request.user, User.Role.DIRECTOR):
             return Response({'error': 'Only Directors can reject requests.'}, status=status.HTTP_403_FORBIDDEN)
         transition_error = _validate_request_transition(request_obj.status, Request.Status.DIRECTOR_REJECTED)
         if transition_error:
@@ -617,6 +642,11 @@ class RequestViewSet(viewsets.ModelViewSet):
             ),
             created_by=request.user,
         )
+        try:
+            EmailNotificationService.send_request_rejected(request_obj)
+        except Exception:
+            logger.exception("Email send_request_rejected failed for %s", request_obj.request_id)
+
         return Response(RequestSerializer(request_obj, context={"request": request}).data)
 
     @action(detail=True, methods=['post'])
@@ -624,7 +654,7 @@ class RequestViewSet(viewsets.ModelViewSet):
     def request_clarification(self, request, pk=None):
         """Director returns a request for clarification."""
         request_obj = self.get_object()
-        if not user_has_role(request.user, User.Role.DIRECTOR):
+        if not _has_primary_role(request.user, User.Role.DIRECTOR):
             return Response({'error': 'Only Directors can request clarification.'}, status=status.HTTP_403_FORBIDDEN)
         transition_error = _validate_request_transition(request_obj.status, Request.Status.NEEDS_CLARIFICATION)
         if transition_error:
@@ -806,10 +836,15 @@ class RequestViewSet(viewsets.ModelViewSet):
     def mark_as_paid(self, request, pk=None):
         """Record first payment for an approved request."""
         request_obj = self.get_object()
-        payment_allowed_statuses = {Request.Status.APPROVED, Request.Status.PENDING_PAYMENT}
+        payment_allowed_statuses = {
+            Request.Status.DIRECTOR_APPROVED,
+            Request.Status.APPROVED,
+            Request.Status.FINANCE_PROCESSING,
+            Request.Status.PENDING_PAYMENT,
+        }
         if request_obj.status not in payment_allowed_statuses:
             return Response(
-                {'error': 'Can only record payment for approved or pending-payment requests'},
+                {'error': 'Can only record payment for approved, director-approved, finance-processing, or pending-payment requests'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -896,6 +931,10 @@ class RequestViewSet(viewsets.ModelViewSet):
             ),
             created_by=request.user,
         )
+        try:
+            EmailNotificationService.send_payment_processed(request_obj)
+        except Exception:
+            logger.exception("Email send_payment_processed failed for %s", request_obj.request_id)
 
         return Response(RequestSerializer(request_obj, context={"request": request}).data)
 
@@ -986,6 +1025,10 @@ class RequestViewSet(viewsets.ModelViewSet):
             ),
             created_by=request.user,
         )
+        try:
+            EmailNotificationService.send_payment_processed(request_obj)
+        except Exception:
+            logger.exception("Email send_payment_processed failed for %s", request_obj.request_id)
 
         return Response(RequestSerializer(request_obj, context={"request": request}).data)
 
@@ -994,9 +1037,15 @@ class RequestViewSet(viewsets.ModelViewSet):
     def mark_payment_completed(self, request, pk=None):
         """Mark payment workflow as completed."""
         request_obj = self.get_object()
-        if request_obj.status not in {Request.Status.APPROVED, Request.Status.PARTIALLY_PAID}:
+        if request_obj.status not in {
+            Request.Status.DIRECTOR_APPROVED,
+            Request.Status.APPROVED,
+            Request.Status.FINANCE_PROCESSING,
+            Request.Status.PENDING_PAYMENT,
+            Request.Status.PARTIALLY_PAID,
+        }:
             return Response(
-                {'error': 'Can only complete payment for approved or partially paid requests'},
+                {'error': 'Can only complete payment for approved, director-approved, finance-processing, pending-payment, or partially paid requests'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -1106,7 +1155,7 @@ class RequestViewSet(viewsets.ModelViewSet):
         notify_users(
             recipients=_notification_recipients_for_request(request_obj, [User.Role.ADMIN, User.Role.DIRECTOR]),
             payload=NotificationPayload(
-                kind="audit",
+                kind="event",
                 title="Request cancelled",
                 message=f"{request_obj.request_id} was cancelled.",
                 href=f"/requests/{request_obj.id}",
@@ -1158,7 +1207,7 @@ class RequestViewSet(viewsets.ModelViewSet):
         notify_users(
             recipients=_notification_recipients_for_request(request_obj, [User.Role.ADMIN, User.Role.DIRECTOR]),
             payload=NotificationPayload(
-                kind="audit",
+                kind="event",
                 title="Request restored",
                 message=f"{request_obj.request_id} was restored to pending review.",
                 href=f"/requests/{request_obj.id}",
@@ -1177,12 +1226,13 @@ class RequestViewSet(viewsets.ModelViewSet):
             return Response({'error': transition_error}, status=status.HTTP_400_BAD_REQUEST)
 
         if not (
-            user_has_role(request.user, User.Role.DIRECTOR)
-            or user_has_role(request.user, User.Role.ADMIN)
+            _has_primary_role(request.user, User.Role.DIRECTOR)
+            or _has_primary_role(request.user, User.Role.ADMIN)
+            or _has_primary_role(request.user, "super_admin")
         ):
             return Response({'error': 'Only Directors or Administrators can revert decisions.'}, status=status.HTTP_403_FORBIDDEN)
 
-        if user_has_role(request.user, User.Role.DIRECTOR) and not user_has_role(request.user, User.Role.ADMIN):
+        if _has_primary_role(request.user, User.Role.DIRECTOR):
             if request_obj.reviewed_by_id and request_obj.reviewed_by_id != request.user.id:
                 return Response({'error': 'Directors can only revert decisions they made.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1228,7 +1278,7 @@ class RequestViewSet(viewsets.ModelViewSet):
         notify_users(
             recipients=_notification_recipients_for_request(request_obj, [User.Role.ADMIN, User.Role.DIRECTOR]),
             payload=NotificationPayload(
-                kind="audit",
+                kind="event",
                 title="Request reversed",
                 message=f"{request_obj.request_id} was moved back to under review.",
                 href=f"/requests/{request_obj.id}",
@@ -1267,6 +1317,18 @@ class RequestViewSet(viewsets.ModelViewSet):
             object_id=str(request_obj.id),
             description=f"Added {'internal note' if is_internal else 'comment'} to request {request_obj.request_id}.",
         )
+
+        if not is_internal and request_obj.created_by and request_obj.created_by != request.user and request_obj.created_by.is_active:
+            notify_users(
+                recipients=[request_obj.created_by],
+                payload=NotificationPayload(
+                    kind="event",
+                    title="Comment added",
+                    message=f"A comment was added to your request {request_obj.request_id}.",
+                    href=f"/requests/{request_obj.id}",
+                ),
+                created_by=request.user,
+            )
 
         return Response(RequestSerializer(request_obj, context={"request": request}).data, status=status.HTTP_201_CREATED)
 

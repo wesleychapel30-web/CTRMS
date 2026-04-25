@@ -220,6 +220,31 @@ class EnterpriseWorkflowTests(TestCase):
         self.assertEqual(self.budget.committed_amount, Decimal("0.00"))
         self.assertEqual(self.budget.spent_amount, Decimal("75000.00"))
 
+    def test_finance_officer_can_complete_finance_procurement_approval_step(self):
+        finance_user = User.objects.create_user(
+            username="finance-approver",
+            password="StrongPass123!",
+            email="finance-approver@example.com",
+            role=User.Role.FINANCE_OFFICER,
+            is_staff=True,
+            is_active=True,
+        )
+        procurement_request = self._build_request(quantity=Decimal("2.00"), unit_price=Decimal("25000.00"))
+        submit_procurement_request(procurement_request, actor=self.actor)
+        approve_procurement_request(procurement_request, actor=self.actor, comments="Admin approval")
+
+        client = Client()
+        client.force_login(finance_user)
+        response = client.post(
+            reverse("api_enterprise_procurement_request_approve", args=[procurement_request.pk]),
+            {"comments": "Finance approval"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        procurement_request.refresh_from_db()
+        self.assertEqual(procurement_request.status, ProcurementRequest.Status.APPROVED)
+
     def test_submit_rejects_when_budget_is_exceeded(self):
         procurement_request = self._build_request(quantity=Decimal("100.00"), unit_price=Decimal("25000.00"))
 

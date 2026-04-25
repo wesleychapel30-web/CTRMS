@@ -65,6 +65,7 @@ class RequestSerializer(serializers.ModelSerializer):
     category_display = serializers.CharField(source='get_category_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    finance_processed_by_name = serializers.CharField(source='finance_processed_by.get_full_name', read_only=True)
 
     def get_timeline_entries(self, obj: Request):
         view = self.context.get("view")
@@ -81,12 +82,17 @@ class RequestSerializer(serializers.ModelSerializer):
                  'address', 'title', 'category', 'category_display', 'description',
                  'number_of_beneficiaries',
                  'amount_requested', 'approved_amount', 'disbursed_amount', 'remaining_balance',
-                 'status', 'status_display', 'reviewed_by', 'reviewed_by_name', 'review_notes',
+                 'status', 'status_display', 'workflow_route',
+                 'reviewed_by', 'reviewed_by_name', 'review_notes',
                  'reviewed_at', 'payment_date', 'payment_method', 'payment_reference',
+                 'finance_processed_by', 'finance_processed_by_name',
+                 'finance_notes', 'finance_processed_at',
                  'created_by', 'created_by_name',
                  'documents', 'history', 'timeline_entries', 'created_at', 'updated_at')
-        read_only_fields = ('id', 'request_id', 'remaining_balance', 'created_at', 'updated_at',
+        read_only_fields = ('id', 'request_id', 'remaining_balance', 'workflow_route',
+                           'created_at', 'updated_at',
                            'reviewed_by', 'reviewed_at', 'reviewed_by_name',
+                           'finance_processed_by', 'finance_processed_by_name', 'finance_processed_at',
                            'created_by', 'created_by_name')
 
 
@@ -126,7 +132,10 @@ class RequestApprovalSerializer(serializers.ModelSerializer):
         fields = ('status', 'approved_amount', 'review_notes')
         
     def validate(self, data):
-        if not data.get('approved_amount') and (self.instance is None or self.instance.approved_amount is None):
+        approved_amount = data.get('approved_amount', serializers.empty)
+        if approved_amount is serializers.empty:
+            approved_amount = getattr(self.instance, 'approved_amount', None)
+        if approved_amount is None:
             raise serializers.ValidationError("Approved amount is required for approval")
         return data
 

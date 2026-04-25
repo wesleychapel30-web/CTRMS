@@ -969,6 +969,154 @@ def branch_detail_api(request, branch_id):
 
 
 @login_required
+@require_any_permission(["inventory:view", "goods_receipt:record", "procurement:create", "procurement:view_all"])
+def product_catalog_api(request):
+    """List products (GET) or create a new product (POST)."""
+    organization = _active_organization()
+    if organization is None:
+        return _json_error("No active organization found.", status=404)
+
+    if request.method == "GET":
+        include_inactive = request.GET.get("include_inactive") == "1"
+        qs = Product.objects.filter(organization=organization)
+        if not include_inactive:
+            qs = qs.filter(is_active=True)
+        products = list(qs.order_by("name"))
+        ledger_totals = defaultdict(Decimal)
+        for row in InventoryLedgerEntry.objects.filter(organization=organization).values("product_id").annotate(total=models.Sum("quantity")):
+            ledger_totals[str(row["product_id"])] = row["total"] or Decimal("0.00")
+        for p in products:
+            p.on_hand_value = ledger_totals.get(str(p.id), Decimal("0.00"))
+        return JsonResponse({"success": True, "products": ProductSerializer(products, many=True).data})
+
+    if request.method != "POST":
+        return _json_error("Method not allowed.", status=405)
+
+    if not user_has_permission(request.user, "goods_receipt:record") and not user_has_permission(request.user, "inventory:view"):
+        return _json_error("Permission denied.", status=403)
+
+    payload = _parse_payload(request)
+    sku = (payload.get("sku") or "").strip()
+    name = (payload.get("name") or "").strip()
+    if not sku:
+        return _json_error("SKU is required.", status=400)
+    if not name:
+        return _json_error("Product name is required.", status=400)
+
+    if Product.objects.filter(organization=organization, sku=sku).exists():
+        return _json_error(f"A product with SKU '{sku}' already exists.", status=400)
+
+    product = Product(
+        organization=organization,
+        sku=sku,
+        name=name,
+        description=payload.get("description", ""),
+        unit_of_measure=payload.get("unit_of_measure", "unit") or "unit",
+        standard_cost=payload.get("standard_cost", "0.00") or "0.00",
+        reorder_level=payload.get("reorder_level", "0.00") or "0.00",
+        is_active=bool(payload.get("is_active", True)),
+    )
+    try:
+        product.full_clean()
+        product.save()
+    except Exception as exc:
+        return _json_error(str(exc), status=400)
+
+    product.on_hand_value = Decimal("0.00")
+    AuditLog.objects.create(
+        user=request.user,
+        action_type=AuditLog.ActionType.CREATE,
+        content_type="Product",
+        object_id=str(product.id),
+        description=f"Created product {product.sku} · {product.name}.",
+    )
+    return JsonResponse({"success": True, "product": ProductSerializer(product).data}, status=201)
+
+
+@login_required
+@require_any_permission(["inventory:view", "goods_receipt:record", "procurement:create", "procurement:view_all"])
+def product_catalog_detail_api(request, product_id):
+    """Retrieve (GET), update (PATCH), or deactivate (DELETE) a product."""
+    organization = _active_organization()
+    if organization is None:
+        return _json_error("No active organization found.", status=404)
+
+    product = Product.objects.filter(organization=organization, id=product_id).first()
+    if product is None:
+        return _json_error("Product not found.", status=404)
+
+    if request.method == "GET":
+        product.on_hand_value = product.on_hand
+        return JsonResponse({"success": True, "product": ProductSerializer(product).data})
+
+    if request.method == "DELETE":
+        product.is_active = False
+        product.save(update_fields=["is_active", "updated_at"])
+        return JsonResponse({"success": True})
+
+    if request.method != "PATCH":
+        return _json_error("Method not allowed.", status=405)
+
+    payload = _parse_payload(request)
+    updated_fields = []
+    for field in ("name", "description", "unit_of_measure", "standard_cost", "reorder_level", "is_active"):
+        if field in payload:
+            setattr(product, field, payload[field])
+            updated_fields.append(field)
+    if "sku" in payload:
+        new_sku = (payload["sku"] or "").strip()
+        if new_sku and new_sku != product.sku:
+            if Product.objects.filter(organization=organization, sku=new_sku).exclude(id=product.id).exists():
+                return _json_error(f"A product with SKU '{new_sku}' already exists.", status=400)
+            product.sku = new_sku
+            updated_fields.append("sku")
+    if updated_fields:
+        try:
+            product.full_clean()
+            product.save(update_fields=[*updated_fields, "updated_at"])
+        except Exception as exc:
+            return _json_error(str(exc), status=400)
+
+    product.on_hand_value = product.on_hand
+    return JsonResponse({"success": True, "product": ProductSerializer(product).data})
+
+
+@login_required
+@require_any_permission(["purchase_order:issue", "goods_receipt:record"])
+def purchase_order_line_link_api(request, line_id):
+    """PATCH: link or unlink a purchase order line to a catalog product."""
+    from .models import PurchaseOrderLine
+    organization = _active_organization()
+    if organization is None:
+        return _json_error("No active organization found.", status=404)
+
+    line = PurchaseOrderLine.objects.select_related("purchase_order").filter(
+        id=line_id, purchase_order__organization=organization
+    ).first()
+    if line is None:
+        return _json_error("Purchase order line not found.", status=404)
+
+    if line.purchase_order.status not in {PurchaseOrder.Status.DRAFT, PurchaseOrder.Status.ISSUED, PurchaseOrder.Status.PARTIALLY_RECEIVED}:
+        return _json_error("Cannot re-link products on a fully received or cancelled order.", status=400)
+
+    payload = _parse_payload(request)
+    product_id = payload.get("product_id")
+    if product_id is None:
+        return _json_error("product_id is required.", status=400)
+
+    if product_id == "" or product_id is None:
+        line.product = None
+    else:
+        product = Product.objects.filter(organization=organization, id=product_id, is_active=True).first()
+        if product is None:
+            return _json_error("Product not found in catalog.", status=404)
+        line.product = product
+
+    line.save(update_fields=["product", "updated_at"])
+    return JsonResponse({"success": True, "line_id": str(line.id), "product_id": str(line.product_id) if line.product_id else None})
+
+
+@login_required
 @require_any_permission(["procurement:approve", "payment_request:approve", "invoice:approve"])
 def approval_inbox_api(request):
     organization = _active_organization()

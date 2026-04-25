@@ -12,9 +12,9 @@ export const enterpriseUsers = {
 
 export async function loginAs(page: Page, username: string) {
   await page.goto("/login");
-  await page.getByLabel("Email or terminal ID").fill(username);
+  await page.getByLabel("Username or email").fill(username);
   await page.getByLabel("Password").fill(e2ePassword);
-  await page.getByRole("button", { name: /authorize access/i }).click();
+  await page.getByRole("button", { name: /^sign in$/i }).click();
   await expect(page).not.toHaveURL(/\/login$/);
 }
 

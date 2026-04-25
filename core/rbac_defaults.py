@@ -215,16 +215,31 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "profile:change_password",
     ],
     "staff": [
+        "document:view_own",
+        "request:create",
+        "request:update_own",
+        "request:upload_own",
         "request:view_own",
+        "request:cancel",
         "profile:change_password",
     ],
     "standard_employee": [
+        "dashboard:view",
+        "request:create",
+        "request:view_own",
+        "request:update_own",
+        "request:upload_own",
+        "request:cancel",
+        "document:view_own",
+        "invitation:view_own",
+        "invitation:upload_own",
         "profile:change_password",
     ],
     "finance_officer": [
         "dashboard:view",
         "search:global",
         "procurement:view_all",
+        "procurement:approve",
         "purchase_order:view_all",
         "goods_receipt:view",
         "inventory:view",
@@ -293,6 +308,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "it_admin": [
         "dashboard:view",
         "search:global",
+        "audit:view",
         "settings:update",
         "user:manage",
         "user:create",
@@ -323,8 +339,8 @@ POLICY_BOUND_PERMISSIONS: dict[str, dict[str, object]] = {
         "reason": "Only Directors can reject requests.",
     },
     "audit:view": {
-        "allowed_roles": (User.Role.ADMIN, User.Role.DIRECTOR),
-        "reason": "Activity logs are restricted to Administrators and Directors.",
+        "allowed_roles": (User.Role.ADMIN, User.Role.DIRECTOR, "it_admin"),
+        "reason": "Activity logs are restricted to Administrators, Directors, and IT Admins.",
     },
 }
 

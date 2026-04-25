@@ -974,3 +974,55 @@ export async function uploadFinancePaymentRequestAttachment(paymentRequestId: st
     }
   );
 }
+
+export async function fetchProductCatalog(includeInactive = false) {
+  const qs = includeInactive ? "?include_inactive=1" : "";
+  return apiFetch<{ success: boolean; products: EnterpriseProduct[] }>(`/api/enterprise/products/${qs}`);
+}
+
+export async function createProduct(payload: {
+  sku: string;
+  name: string;
+  description?: string;
+  unit_of_measure?: string;
+  standard_cost?: string | number;
+  reorder_level?: string | number;
+  is_active?: boolean;
+}) {
+  return apiFetch<{ success: boolean; product: EnterpriseProduct }>("/api/enterprise/products/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateProduct(
+  productId: string,
+  payload: {
+    sku?: string;
+    name?: string;
+    description?: string;
+    unit_of_measure?: string;
+    standard_cost?: string | number;
+    reorder_level?: string | number;
+    is_active?: boolean;
+  }
+) {
+  return apiFetch<{ success: boolean; product: EnterpriseProduct }>(`/api/enterprise/products/${productId}/`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deactivateProduct(productId: string) {
+  return apiFetch<{ success: boolean }>(`/api/enterprise/products/${productId}/`, { method: "DELETE" });
+}
+
+export async function linkProductToOrderLine(lineId: string, productId: string | null) {
+  return apiFetch<{ success: boolean; line_id: string; product_id: string | null }>(
+    `/api/enterprise/purchase-order-lines/${lineId}/link-product/`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ product_id: productId }),
+    }
+  );
+}

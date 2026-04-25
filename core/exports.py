@@ -55,7 +55,15 @@ def _filtered_requests_queryset(request):
     user = getattr(request, "user", None)
     if user and user.is_authenticated and not user_has_permission(user, "request:view_all"):
         if user_has_permission(user, "payment:view") or user_has_permission(user, "payment:record"):
-            queryset = queryset.filter(status__in=[Request.Status.APPROVED, Request.Status.PARTIALLY_PAID, Request.Status.PAID])
+            queryset = queryset.filter(status__in=[
+                Request.Status.DIRECTOR_APPROVED,
+                Request.Status.FINANCE_PROCESSING,
+                Request.Status.FINANCE_QUERY,
+                Request.Status.PENDING_PAYMENT,
+                Request.Status.APPROVED,
+                Request.Status.PARTIALLY_PAID,
+                Request.Status.PAID,
+            ])
         else:
             queryset = queryset.filter(created_by=user)
 

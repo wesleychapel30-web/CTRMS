@@ -6,7 +6,7 @@ const roleCases = [
     name: "procurement user",
     username: enterpriseUsers.procurement,
     workspacePath: "/procurement",
-    workspaceBanner: "Procurement view is focused on creating, refining, converting, and issuing purchase requests safely.",
+    workspaceHeading: "Procurement",
     visibleNav: ["Dashboard", "Procurement", "Inventory", "Documents"],
     hiddenNav: ["Approvals", "Finance", "Activity Logs", "Administration Panel", "Organization"],
     blockedPath: "/finance",
@@ -15,7 +15,7 @@ const roleCases = [
     name: "inventory user",
     username: enterpriseUsers.inventory,
     workspacePath: "/inventory",
-    workspaceBanner: "Operations view prioritizes receiving and stock movement controls.",
+    workspaceHeading: "Inventory",
     visibleNav: ["Dashboard", "Procurement", "Inventory", "Documents"],
     hiddenNav: ["Approvals", "Finance", "Activity Logs", "Administration Panel", "Organization"],
     blockedPath: "/finance",
@@ -24,7 +24,7 @@ const roleCases = [
     name: "finance user",
     username: enterpriseUsers.finance,
     workspacePath: "/finance",
-    workspaceBanner: "Finance view prioritizes invoice control, payment approvals, and settlement evidence.",
+    workspaceHeading: "Finance",
     visibleNav: ["Dashboard", "Approvals", "Procurement", "Inventory", "Finance", "Reports", "Documents"],
     hiddenNav: ["Activity Logs", "Administration Panel", "Organization"],
     blockedPath: "/activity",
@@ -33,7 +33,7 @@ const roleCases = [
     name: "manager",
     username: enterpriseUsers.manager,
     workspacePath: "/procurement",
-    workspaceBanner: "Manager view is centered on approvals and draft visibility for department workflows.",
+    workspaceHeading: "Procurement",
     visibleNav: ["Dashboard", "Approvals", "Procurement", "Inventory", "Finance", "Reports", "Documents"],
     hiddenNav: ["Activity Logs", "Administration Panel", "Organization"],
     blockedPath: "/activity",
@@ -42,7 +42,7 @@ const roleCases = [
     name: "super admin",
     username: enterpriseUsers.superAdmin,
     workspacePath: "/procurement",
-    workspaceBanner: "You have full cross-slice authority here, including approvals, conversion, and order issuance.",
+    workspaceHeading: "Procurement",
     visibleNav: ["Dashboard", "Organization", "Approvals", "Procurement", "Inventory", "Finance", "Reports", "Documents", "Activity Logs", "Administration Panel", "System Settings"],
     hiddenNav: [],
     blockedPath: null,
@@ -61,7 +61,7 @@ test.describe("Role-aware visibility", () => {
       }
 
       await page.goto(roleCase.workspacePath);
-      await expect(page.getByText(roleCase.workspaceBanner)).toBeVisible();
+      await expect(page.getByRole("heading", { name: roleCase.workspaceHeading })).toBeVisible();
 
       if (roleCase.blockedPath) {
         await page.goto(roleCase.blockedPath);

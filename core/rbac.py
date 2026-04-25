@@ -10,6 +10,10 @@ from core.models import Permission, RoleDefinition, RolePermission, User, UserRo
 
 _seed_attempted = False
 STAFF_RESTRICTED_PERMISSION_KEYS = {
+    "document:view_own",
+    "request:create",
+    "request:update_own",
+    "request:upload_own",
     "request:view_own",
     "profile:change_password",
 }

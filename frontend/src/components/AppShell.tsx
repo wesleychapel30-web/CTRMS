@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { navItems } from "../config/navigation";
-import { fetchGlobalSearch, fetchNotifications, fetchPublicBranding, markNotificationRead, resolveAssetUrl } from "../lib/api";
+import { fetchGlobalSearch, fetchPublicBranding, markNotificationRead, resolveAssetUrl } from "../lib/api";
+import { fireDesktopNotification, getNotificationMeta, requestDesktopPermission } from "../lib/notifications";
+import { useNotificationPoll } from "../lib/useNotificationPoll";
+import { useToast } from "../context/ToastContext";
 import { Sidebar } from "./Sidebar";
 import { TopHeader } from "./TopHeader";
 import type { BrandingSettings, NotificationItem, SessionUser, ThemeMode } from "../types";
@@ -22,10 +25,29 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [notificationError, setNotificationError] = useState<string | null>(null);
-  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+
+  const { showToast } = useToast();
+
+  const handleNewNotifications = useCallback(
+    (newItems: NotificationItem[]) => {
+      for (const item of newItems.slice(0, 3)) {
+        const meta = getNotificationMeta(item);
+        const title = item.title || meta.fallbackTitle;
+        showToast("info", { title, message: item.message || title, durationMs: 5500 });
+        fireDesktopNotification(title, item.message || "", item.href);
+      }
+    },
+    [showToast],
+  );
+
+  const {
+    notifications,
+    unreadCount,
+    isLoading: isNotificationsLoading,
+    error: notificationError,
+    refresh: refreshNotifications,
+    markRead,
+  } = useNotificationPoll(handleNewNotifications);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ title: string; subtitle: string; href: string }>>([]);
@@ -76,25 +98,12 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
   }, []);
 
   useEffect(() => {
-    fetchNotifications()
-      .then((data) => setUnreadCount(data.unread_count ?? 0))
-      .catch(() => null);
+    requestDesktopPermission();
   }, []);
 
   useEffect(() => {
-    if (!isNotificationsOpen) {
-      return;
-    }
-    setIsNotificationsLoading(true);
-    fetchNotifications()
-      .then((data) => {
-        setNotifications(data.notifications ?? []);
-        setUnreadCount(data.unread_count ?? 0);
-        setNotificationError(null);
-      })
-      .catch((reason) => setNotificationError(reason instanceof Error ? reason.message : "Unable to load notifications"))
-      .finally(() => setIsNotificationsLoading(false));
-  }, [isNotificationsOpen]);
+    if (isNotificationsOpen) refreshNotifications();
+  }, [isNotificationsOpen, refreshNotifications]);
 
   useEffect(() => {
     if (!canGlobalSearch || !isSearchOpen) {
@@ -126,8 +135,8 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
   }, [canGlobalSearch, isSearchOpen, searchQuery]);
 
   const handleNotificationClick = (item: NotificationItem) => {
-    setNotifications((current) => current.map((entry) => (entry.id === item.id ? { ...entry, is_read: true } : entry)));
-    void markNotificationRead(item.id).then((response) => setUnreadCount(response.unread_count)).catch(() => null);
+    markRead(item.id);
+    void markNotificationRead(item.id).catch(() => null);
     setIsNotificationsOpen(false);
     if (item.href) {
       navigate(item.href);

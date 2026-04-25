@@ -162,11 +162,15 @@ export function ProcurementPage() {
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const canViewFinanceWorkspace = hasAnyPermission(["finance:view", "invoice:post", "invoice:approve", "payment_request:approve", "payment:record"]);
 
   const loadWorkspace = async (options?: { focusRequestId?: string | null; focusOrderId?: string | null }) => {
     setIsLoading(true);
     try {
-      const [procurementPayload, financePayload] = await Promise.all([fetchProcurementWorkspace(), fetchFinanceWorkspace()]);
+      const [procurementPayload, financePayload] = await Promise.all([
+        fetchProcurementWorkspace(),
+        canViewFinanceWorkspace ? fetchFinanceWorkspace() : Promise.resolve(null),
+      ]);
       const requestedOrderId = options?.focusOrderId ?? searchParams.get("order") ?? selectedOrderId ?? null;
       const orderFromQuery = requestedOrderId ? procurementPayload.purchase_orders.find((item) => item.id === requestedOrderId) ?? null : null;
       const nextRequestId =

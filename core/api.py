@@ -48,7 +48,14 @@ ACTIONABLE_NOTIFICATION_TITLES = {
     "Pending approval",
     "Request approved",
     "Request rejected",
+    "Request cancelled",
+    "Request restored",
+    "Request reversed",
+    "Comment added",
     "Payment recorded",
+    "Payment pending",
+    "Finance query",
+    "Clarification needed",
     "Invitation response",
     "Event reminder",
     "Overdue item",
@@ -221,7 +228,7 @@ def approve_request_ajax(request):
         req_obj.approved_amount = approved_amount
         req_obj.reviewed_by = request.user
         req_obj.status = Request.Status.APPROVED
-        req_obj.review_notes = data.get('notes', '')
+        req_obj.review_notes = data.get('review_notes', data.get('notes', ''))
         req_obj.reviewed_at = timezone.now()
         req_obj.save()
         
@@ -268,12 +275,13 @@ def reject_request_ajax(request):
             return JsonResponse({'success': False, 'error': 'Request cannot be rejected in current status'}, status=400)
         
         # Update request
+        review_notes = data.get('review_notes', data.get('reason', ''))
         req_obj.status = Request.Status.REJECTED
-        req_obj.review_notes = data.get('reason', '')
+        req_obj.review_notes = review_notes
         req_obj.reviewed_by = request.user
         req_obj.reviewed_at = timezone.now()
         req_obj.save()
-        
+
         # Log the action
         AuditLog.objects.create(
             user=request.user,
@@ -281,7 +289,7 @@ def reject_request_ajax(request):
             content_type='Request',
             object_id=str(req_obj.id),
             ip_address=get_client_ip(request),
-            description=f"Rejected request {req_obj.request_id}. {data.get('reason', '').strip()}".strip()
+            description=f"Rejected request {req_obj.request_id}. {review_notes.strip()}".strip()
         )
         
         return JsonResponse({
@@ -310,8 +318,14 @@ def mark_as_paid_ajax(request):
         except Request.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Request not found'}, status=404)
         
-        if req_obj.status != Request.Status.APPROVED:
-            return JsonResponse({'success': False, 'error': 'Only approved requests can be marked as paid'}, status=400)
+        _payable_statuses = {
+            Request.Status.APPROVED,
+            Request.Status.DIRECTOR_APPROVED,
+            Request.Status.FINANCE_PROCESSING,
+            Request.Status.PENDING_PAYMENT,
+        }
+        if req_obj.status not in _payable_statuses:
+            return JsonResponse({'success': False, 'error': 'Request cannot be marked as paid in its current status'}, status=400)
 
         disbursed_amount_raw = data.get('disbursed_amount', None)
         if disbursed_amount_raw is None or disbursed_amount_raw == "":
@@ -810,10 +824,9 @@ def get_documents_data(request):
 @require_permission("audit:view")
 def get_activity_logs_data(request):
     """Return recent audit logs."""
-    if not (
-        user_has_role(request.user, User.Role.ADMIN)
-        or user_has_role(request.user, User.Role.DIRECTOR)
-    ):
+    _audit_allowed_roles = _policy_allowed_roles("audit:view")
+    user_role = (getattr(request.user, "role", "") or "").strip()
+    if user_role not in _audit_allowed_roles:
         return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
 
     recent_logs = list(AuditLog.objects.select_related('user').order_by('-created_at')[:200])
