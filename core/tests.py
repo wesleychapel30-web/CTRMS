@@ -1,4 +1,6 @@
+import tempfile
 from datetime import timedelta
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -37,7 +39,11 @@ class PasswordResetTokenTests(TestCase):
 
 class FrontendAppSmokeTests(TestCase):
     def test_root_serves_react_application(self):
-        response = self.client.get('/')
+        with tempfile.TemporaryDirectory() as tmp:
+            index = Path(tmp) / 'index.html'
+            index.write_text('<!doctype html><html><body><div id="root"></div></body></html>', encoding='utf-8')
+            with self.settings(FRONTEND_DIST_ROOT=tmp):
+                response = self.client.get('/')
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '<div id="root"></div>', html=False)
