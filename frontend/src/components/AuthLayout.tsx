@@ -48,7 +48,7 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
           </div>
           <div>
             <p className="headline-font text-base font-bold tracking-[-0.03em] text-white">{siteName}</p>
-            <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/58">{orgName}</p>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/80">{orgName}</p>
           </div>
         </div>
 
