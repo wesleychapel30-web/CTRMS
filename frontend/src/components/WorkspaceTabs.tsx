@@ -28,15 +28,15 @@ export function WorkspaceTabs<TKey extends string>({
             onClick={() => onChange(tab.key)}
             className={`rounded-md px-3 py-2 text-xs font-semibold transition ${
               isActive
-                ? "bg-[var(--surface-card)] text-[var(--accent)] shadow-sm ring-1 ring-[var(--line)]"
-                : "bg-[var(--surface-low)] text-[var(--muted)] hover:text-[var(--ink)]"
+                ? "bg-[var(--accent)] text-white shadow-sm"
+                : "bg-[var(--surface-low)] text-[var(--muted)] hover:bg-[var(--surface-card)] hover:text-[var(--ink)]"
             }`}
           >
             <span>{tab.label}</span>
             {tab.badge !== undefined && tab.badge !== null ? (
               <span
                 className={`ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                  isActive ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "bg-[var(--surface-card)] text-[var(--muted)]"
+                  isActive ? "bg-white/20 text-white" : "bg-[var(--surface-card)] text-[var(--muted)]"
                 }`}
               >
                 {tab.badge}

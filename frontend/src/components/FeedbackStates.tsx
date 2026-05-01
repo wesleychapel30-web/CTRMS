@@ -18,6 +18,7 @@ const bannerMeta: Record<
   {
     icon: LucideIcon;
     shell: string;
+    iconBg: string;
     iconTone: string;
     titleTone: string;
     actionTone: string;
@@ -25,31 +26,35 @@ const bannerMeta: Record<
 > = {
   error: {
     icon: AlertCircle,
-    shell: "border-rose-200/80 bg-rose-50/90 dark:border-rose-500/20 dark:bg-rose-500/10",
-    iconTone: "text-rose-600 dark:text-rose-300",
-    titleTone: "text-rose-900 dark:text-rose-100",
-    actionTone: "text-rose-700 hover:text-rose-900 dark:text-rose-200 dark:hover:text-white",
+    shell: "border-[var(--danger)]/35 bg-[var(--status-danger-bg)]",
+    iconBg: "bg-[var(--danger)]/15",
+    iconTone: "text-[var(--danger)]",
+    titleTone: "text-[var(--status-danger-text)]",
+    actionTone: "text-[var(--danger)] hover:opacity-75",
   },
   warning: {
     icon: AlertTriangle,
-    shell: "border-amber-200/80 bg-amber-50/90 dark:border-amber-500/20 dark:bg-amber-500/10",
-    iconTone: "text-amber-600 dark:text-amber-300",
-    titleTone: "text-amber-900 dark:text-amber-100",
-    actionTone: "text-amber-700 hover:text-amber-900 dark:text-amber-200 dark:hover:text-white",
+    shell: "border-[var(--warning)]/35 bg-[var(--status-warning-bg)]",
+    iconBg: "bg-[var(--warning)]/15",
+    iconTone: "text-[var(--warning)]",
+    titleTone: "text-[var(--status-warning-text)]",
+    actionTone: "text-[var(--warning)] hover:opacity-75",
   },
   info: {
     icon: Info,
-    shell: "border-sky-200/80 bg-sky-50/90 dark:border-sky-500/20 dark:bg-sky-500/10",
-    iconTone: "text-sky-600 dark:text-sky-300",
-    titleTone: "text-sky-900 dark:text-sky-100",
-    actionTone: "text-sky-700 hover:text-sky-900 dark:text-sky-200 dark:hover:text-white",
+    shell: "border-[var(--accent)]/30 bg-[var(--status-info-bg)]",
+    iconBg: "bg-[var(--accent)]/15",
+    iconTone: "text-[var(--accent)]",
+    titleTone: "text-[var(--status-info-text)]",
+    actionTone: "text-[var(--accent)] hover:opacity-75",
   },
   success: {
     icon: CheckCircle2,
-    shell: "border-emerald-200/80 bg-emerald-50/90 dark:border-emerald-500/20 dark:bg-emerald-500/10",
-    iconTone: "text-emerald-600 dark:text-emerald-300",
-    titleTone: "text-emerald-900 dark:text-emerald-100",
-    actionTone: "text-emerald-700 hover:text-emerald-900 dark:text-emerald-200 dark:hover:text-white",
+    shell: "border-[var(--success)]/35 bg-[var(--status-success-bg)]",
+    iconBg: "bg-[var(--success)]/15",
+    iconTone: "text-[var(--success)]",
+    titleTone: "text-[var(--status-success-text)]",
+    actionTone: "text-[var(--success)] hover:opacity-75",
   },
 };
 
@@ -95,7 +100,7 @@ export function InlineBanner({
   return (
     <div className={joinClasses("feedback-enter rounded-xl border px-4 py-3", meta.shell, className)}>
       <div className="flex items-start gap-3">
-        <div className={joinClasses("mt-0.5 rounded-full p-1.5", meta.iconTone)}>
+        <div className={joinClasses("mt-0.5 rounded-full p-1.5", meta.iconBg, meta.iconTone)}>
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">

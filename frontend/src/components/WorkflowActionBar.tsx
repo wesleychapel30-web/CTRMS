@@ -39,7 +39,7 @@ export function WorkflowActionBar({
         const isPrimary = primaryActions.has(action);
         const isDestructive = destructiveActions.has(action);
         const toneClass = isDestructive
-          ? "border border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
+          ? "danger-ghost-button border"
           : isPrimary
             ? "primary-button"
             : "secondary-button";
@@ -52,7 +52,7 @@ export function WorkflowActionBar({
             disabled={Boolean(busyAction)}
             data-testid={`${testIdPrefix}-${action}`}
             aria-label={formatEnterpriseActionLabel(action)}
-            className={`interactive-press rounded-sm px-3 py-2 text-xs font-semibold ${toneClass} disabled:opacity-60`}
+            className={`interactive-press rounded-md px-3 py-2 text-xs font-semibold ${toneClass} disabled:opacity-60`}
           >
             {isBusy ? "Working..." : formatEnterpriseActionLabel(action)}
           </button>

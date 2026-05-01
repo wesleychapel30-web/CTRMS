@@ -51,7 +51,7 @@ export function StatusBadge({ status, size = "md" }: StatusBadgeProps) {
 
   return (
     <span
-      className={`inline-flex rounded-sm font-bold uppercase tracking-[0.12em] transition-colors ${sizeClass}`}
+      className={`inline-flex rounded-full font-bold uppercase tracking-[0.12em] transition-colors ${sizeClass}`}
       style={{ background: meta.bg, color: meta.text }}
     >
       {status.replace(/_/g, " ")}
