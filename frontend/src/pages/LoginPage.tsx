@@ -79,32 +79,32 @@ export function LoginPage() {
       title="Sign In"
     >
       <div className="auth-form-shell relative">
-        <form onSubmit={handleSubmit} className={`space-y-2.5 ${authPhase === "success" ? "auth-form-shell-success" : ""}`}>
-          <label className="grid gap-1">
-            <span className="text-[9px] font-bold uppercase tracking-[0.24em] text-white/70">Username or email</span>
+        <form onSubmit={handleSubmit} className={`space-y-4 ${authPhase === "success" ? "auth-form-shell-success" : ""}`}>
+          <label className="grid gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Username or email</span>
             <input
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               disabled={authPhase === "success"}
-              className="auth-input w-full rounded-md px-3 py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-70"
+              className="auth-input w-full rounded-lg px-3.5 py-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-70"
               placeholder="Username or email"
             />
           </label>
 
-          <label className="grid gap-1">
-            <span className="text-[9px] font-bold uppercase tracking-[0.24em] text-white/70">Password</span>
+          <label className="grid gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Password</span>
             <input
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               disabled={authPhase === "success"}
-              className="auth-input w-full rounded-md px-3 py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-70"
+              className="auth-input w-full rounded-lg px-3.5 py-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-70"
               placeholder="Enter your password"
               type="password"
             />
           </label>
 
-          <label className="flex items-center gap-2 text-[11px] font-medium text-white/78">
-            <input type="checkbox" disabled={authPhase === "success"} className="h-3 w-3 rounded border-white/45 bg-white/12 accent-white" />
+          <label className="flex items-center gap-2 text-[11px] font-medium text-[var(--muted)]">
+            <input type="checkbox" disabled={authPhase === "success"} className="h-3.5 w-3.5 rounded accent-[var(--accent)]" />
             <span>Remember for 24 hours</span>
           </label>
 
@@ -112,7 +112,7 @@ export function LoginPage() {
 
           <button
             disabled={isSubmitting || authPhase === "success"}
-            className="auth-submit-button inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-bold shadow-sm disabled:opacity-60"
+            className="auth-submit-button mt-1 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold shadow-sm disabled:opacity-60"
           >
             {authPhase === "success" ? <ShieldCheck className="h-4 w-4" /> : null}
             {authPhase === "submitting" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}

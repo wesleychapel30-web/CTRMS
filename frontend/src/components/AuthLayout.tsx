@@ -9,26 +9,6 @@ type AuthLayoutProps = {
   children: ReactNode;
 };
 
-const FEATURES = [
-  "Multi-level approval workflows",
-  "Real-time budget & inventory tracking",
-  "Instant cross-team notifications",
-];
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" aria-hidden="true">
-      <polyline
-        points="2,6 5,9 10,3"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
   const logoUrl = resolveAssetUrl(branding?.logo_url);
   const [logoFailed, setLogoFailed] = useState(false);
@@ -44,52 +24,45 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
     <div className="flex min-h-screen flex-col lg:flex-row">
 
       {/* ── Left branding panel (desktop only) ─────── */}
-      <div className="auth-split-brand relative hidden flex-col justify-between overflow-hidden p-10 lg:flex lg:w-[50%] xl:w-[55%] xl:p-14">
-        <div className="auth-split-grid pointer-events-none absolute inset-0" aria-hidden="true" />
-        <div className="auth-split-ring pointer-events-none absolute" aria-hidden="true" />
+      <div className="auth-split-brand relative hidden flex-col overflow-hidden p-10 lg:flex lg:w-[50%] xl:w-[55%] xl:p-14">
 
-        {/* Logo lockup */}
+        {/* Decorative background layers */}
+        <div className="auth-split-grid pointer-events-none absolute inset-0" aria-hidden="true" />
+        <div className="auth-split-glow pointer-events-none absolute" aria-hidden="true" />
+        <div className="auth-split-ring-a pointer-events-none absolute" aria-hidden="true" />
+        <div className="auth-split-ring-b pointer-events-none absolute" aria-hidden="true" />
+
+        {/* Logo lockup — top */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+          <div className="grid h-11 w-11 place-items-center overflow-hidden rounded-xl bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
             {logoUrl && !logoFailed ? (
               <img
                 src={logoUrl}
                 alt={orgName}
                 onError={() => setLogoFailed(true)}
-                className="max-h-9 w-auto object-contain"
+                className="max-h-8 w-auto object-contain"
               />
             ) : (
-              <span className="text-lg font-bold text-white">C</span>
+              <span className="text-base font-bold text-white">C</span>
             )}
           </div>
           <div>
             <p className="headline-font text-base font-bold tracking-[-0.03em] text-white">{siteName}</p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-white/45">{orgName}</p>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/40">{orgName}</p>
           </div>
         </div>
 
-        {/* Hero copy */}
-        <div className="relative z-10">
-          <h2 className="headline-font text-[2.2rem] font-extrabold leading-[1.12] tracking-[-0.04em] text-white xl:text-[2.6rem]">
-            Enterprise request management, simplified.
-          </h2>
-          <p className="mt-5 text-[15px] leading-7 text-white/55">
-            End-to-end procurement, approvals, payments, and reporting — unified for every team.
-          </p>
-          <ul className="mt-8 space-y-3.5">
-            {FEATURES.map((feature) => (
-              <li key={feature} className="flex items-center gap-3 text-sm font-medium text-white/75">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/14 text-white">
-                  <CheckIcon />
-                </span>
-                {feature}
-              </li>
-            ))}
-          </ul>
+        {/* Hero copy — vertically centred */}
+        <div className="relative z-10 flex flex-1 items-center">
+          <div>
+            <h2 className="headline-font text-[2.1rem] font-extrabold leading-[1.1] tracking-[-0.05em] text-white xl:text-[2.5rem]">
+              Enterprise request management.
+            </h2>
+            <p className="mt-4 max-w-[26rem] text-[15px] leading-relaxed text-white/48">
+              Approvals, procurement, and payments in one workspace.
+            </p>
+          </div>
         </div>
-
-        {/* Spacer — keeps hero copy vertically centred between logo and bottom */}
-        <div />
       </div>
 
       {/* ── Right form panel ────────────────────────── */}
