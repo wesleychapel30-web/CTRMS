@@ -69,9 +69,9 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
         </div>
 
         {/* Hero copy */}
-        <div className="relative z-10 max-w-[28rem]">
-          <h2 className="headline-font text-[2.4rem] font-extrabold leading-[1.1] tracking-[-0.04em] text-white xl:text-[2.8rem]">
-            Enterprise request&nbsp;management,&nbsp;simplified.
+        <div className="relative z-10">
+          <h2 className="headline-font text-[2.2rem] font-extrabold leading-[1.12] tracking-[-0.04em] text-white xl:text-[2.6rem]">
+            Enterprise request management, simplified.
           </h2>
           <p className="mt-5 text-[15px] leading-7 text-white/55">
             End-to-end procurement, approvals, payments, and reporting — unified for every team.
@@ -88,10 +88,8 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
           </ul>
         </div>
 
-        {/* Bottom tag */}
-        <p className="relative z-10 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/28">
-          Secure · Enterprise-ready
-        </p>
+        {/* Spacer — keeps hero copy vertically centred between logo and bottom */}
+        <div />
       </div>
 
       {/* ── Right form panel ────────────────────────── */}
@@ -124,10 +122,6 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
           </h1>
           <div className="mt-6">{children}</div>
         </div>
-
-        <p className="mt-10 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]/60">
-          {orgName}
-        </p>
       </div>
     </div>
   );
