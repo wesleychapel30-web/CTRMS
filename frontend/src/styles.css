@@ -15,9 +15,9 @@
   --surface-high: #e1e9ee;
   --surface-highest: #d9e4ea;
   --line: rgba(169, 180, 185, 0.22);
-  --accent: #3461d1;
-  --accent-dim: #2850b8;
-  --accent-soft: #d8e3fb;
+  --accent: #0e7490;
+  --accent-dim: #0b6073;
+  --accent-soft: #cffafe;
   --success: #14805e;
   --warning: #d97706;
   --danger: #9f403d;
@@ -29,8 +29,8 @@
   --shadow-ambient: 0 4px 20px rgba(42, 52, 57, 0.04), 0 12px 40px rgba(42, 52, 57, 0.08);
 
   /* Semantic status color tokens — theme-aware */
-  --status-info-bg: #d5e3fc;
-  --status-info-text: #455367;
+  --status-info-bg: #cffafe;
+  --status-info-text: #155e75;
   --status-purple-bg: #e3dbfd;
   --status-purple-text: #514d68;
   --status-success-bg: #d7f3e4;
@@ -56,9 +56,9 @@
   --surface-high: #24313d;
   --surface-highest: #2a3845;
   --line: rgba(169, 180, 185, 0.14);
-  --accent: #85b4ff;
-  --accent-dim: #6a9ef7;
-  --accent-soft: rgba(133, 180, 255, 0.15);
+  --accent: #22d3ee;
+  --accent-dim: #06b6d4;
+  --accent-soft: rgba(34, 211, 238, 0.12);
   --success: #78d2ae;
   --warning: #f1b857;
   --danger: #e58884;
@@ -70,8 +70,8 @@
   --shadow-ambient: 0 12px 32px rgba(2, 6, 23, 0.35);
 
   /* Semantic status color tokens — dark overrides */
-  --status-info-bg: rgba(100, 149, 237, 0.16);
-  --status-info-text: #9cb6e1;
+  --status-info-bg: rgba(34, 211, 238, 0.13);
+  --status-info-text: #22d3ee;
   --status-purple-bg: rgba(147, 124, 253, 0.16);
   --status-purple-text: #c4b5fd;
   --status-success-bg: rgba(120, 210, 174, 0.16);
@@ -230,7 +230,7 @@ body {
 .primary-button {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
   color: #f6f7ff;
-  box-shadow: 0 10px 26px rgba(52, 97, 209, 0.22);
+  box-shadow: 0 10px 26px rgba(14, 116, 144, 0.24);
 }
 
 .secondary-button {
@@ -341,7 +341,7 @@ body {
 }
 
 .slate-rail {
-  background: linear-gradient(180deg, #101724 0%, #182233 100%);
+  background: linear-gradient(145deg, #041a20 0%, #063344 50%, #0b5a72 100%);
   color: #edf2fb;
   box-shadow: var(--shadow-ambient);
 }
@@ -1478,3 +1478,34 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── Auth split layout ───────────────────────────── */
+.auth-split-brand {
+  background: linear-gradient(155deg, #041a20 0%, #063344 52%, #0b5a72 100%);
+}
+
+.auth-split-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.034) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.034) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.auth-split-ring {
+  right: -9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38rem;
+  height: 38rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  box-shadow:
+    inset 0 0 0 5rem rgba(255, 255, 255, 0.018),
+    inset 0 0 0 10rem rgba(255, 255, 255, 0.008);
+}
+
+/* ── Stat card top bar ───────────────────────────── */
+.stat-bar-accent  { background: linear-gradient(90deg, var(--accent), var(--accent-dim)); }
+.stat-bar-success { background: var(--success); }
+.stat-bar-warning { background: var(--warning); }
+.stat-bar-danger  { background: var(--danger); }
