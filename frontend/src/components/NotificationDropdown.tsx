@@ -30,7 +30,7 @@ export function NotificationDropdown({
   const visibleUnreadCount = visibleNotifications.filter((item) => !item.is_read).length;
 
   return (
-    <div className="surface-panel dropdown-enter absolute right-0 top-[calc(100%+0.75rem)] z-[80] w-[21rem] overflow-hidden rounded-xl">
+    <div className="surface-panel dropdown-enter absolute right-0 top-[calc(100%+0.75rem)] z-[80] w-[min(21rem,calc(100vw-1rem))] overflow-hidden rounded-xl">
       <div className="flex items-center justify-between bg-[var(--surface-low)] px-4 py-3">
         <p className="headline-font text-sm font-bold text-[var(--ink)]">Notifications</p>
         <div className="flex items-center gap-3">

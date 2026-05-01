@@ -208,7 +208,7 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
           onNotificationClick={handleNotificationClick}
         />
 
-        <main className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 md:px-8 lg:px-10">
+        <main className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 sm:py-6 md:px-8 lg:px-10 lg:py-8">
           {rightPanel ? (
             <div key={location.pathname} className="page-enter grid gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
               <div>{children}</div>

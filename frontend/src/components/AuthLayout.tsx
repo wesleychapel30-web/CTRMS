@@ -31,7 +31,7 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
       </div>
 
       <div className="relative mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-6xl place-items-center">
-        <div className="auth-blue-stage relative grid min-h-[34rem] w-full place-items-center overflow-hidden rounded-3xl px-5 py-10 shadow-[0_28px_80px_rgba(12,36,72,0.34)] sm:px-8">
+        <div className="auth-blue-stage relative grid min-h-[min(34rem,calc(100dvh-8rem))] w-full place-items-center overflow-hidden rounded-3xl px-5 py-10 shadow-[0_28px_80px_rgba(12,36,72,0.34)] sm:px-8">
           <div className="auth-stage-mark auth-stage-mark-a" />
           <div className="auth-stage-mark auth-stage-mark-b" />
           <div className="auth-stage-mark auth-stage-mark-c" />

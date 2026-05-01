@@ -45,10 +45,10 @@ export function DataTable<T extends Record<string, unknown>>({
   pagination
 }: DataTableProps<T>) {
   const totalPages = pagination ? Math.max(1, Math.ceil(pagination.count / pagination.pageSize)) : 1;
-  const headerPadding = density === "compact" ? "px-5 py-3" : "px-6 py-4";
-  const cellPadding = density === "compact" ? "px-5 py-3 align-top" : "px-6 py-4";
-  const emptyPadding = density === "compact" ? "px-5 py-6" : "px-6 py-10";
-  const paginationPadding = density === "compact" ? "px-5 py-3" : "px-6 py-4";
+  const headerPadding = density === "compact" ? "px-3 py-2.5 sm:px-5 sm:py-3" : "px-3 py-3 sm:px-6 sm:py-4";
+  const cellPadding = density === "compact" ? "px-3 py-2.5 sm:px-5 sm:py-3 align-top" : "px-3 py-3 sm:px-6 sm:py-4";
+  const emptyPadding = density === "compact" ? "px-3 py-6 sm:px-5" : "px-3 py-8 sm:px-6 sm:py-10";
+  const paginationPadding = density === "compact" ? "px-3 py-3 sm:px-5" : "px-3 py-3 sm:px-6 sm:py-4";
 
   if (isLoading) {
     return <TableSkeleton columns={columns.length} rows={loadingRowCount} message={loadingMessage} />;

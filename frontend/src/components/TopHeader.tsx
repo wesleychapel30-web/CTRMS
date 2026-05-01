@@ -125,11 +125,11 @@ export function TopHeader({
                   onChange={(event) => onSearchChange(event.target.value)}
                   onFocus={onSearchOpen}
                   placeholder="Search records..."
-                  className="w-64 bg-transparent outline-none placeholder:text-[var(--muted)]"
+                  className="w-36 bg-transparent outline-none placeholder:text-[var(--muted)] xl:w-64"
                 />
               </label>
               {isSearchOpen ? (
-                <div className="surface-panel dropdown-enter absolute right-0 top-12 z-40 w-96 overflow-hidden rounded-xl">
+                <div className="surface-panel dropdown-enter absolute right-0 top-12 z-40 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl">
                   <div className="max-h-80 overflow-y-auto p-2">
                     {searchError ? <InlineBanner variant="error" title="Search unavailable" message={searchError} className="m-1" /> : null}
                     {!searchError && !searchQuery.trim() ? (
