@@ -58,9 +58,6 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
             <h2 className="headline-font text-[2.1rem] font-extrabold leading-[1.1] tracking-[-0.05em] text-white xl:text-[2.5rem]">
               Enterprise request management.
             </h2>
-            <p className="mt-4 max-w-[26rem] text-[15px] leading-relaxed text-white/68">
-              Approvals, procurement, and payments in one workspace.
-            </p>
           </div>
         </div>
       </div>
