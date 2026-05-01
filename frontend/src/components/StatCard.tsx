@@ -11,7 +11,7 @@ export function StatCard({ label, value, change, tone }: Stat) {
   const meta = toneMap[tone] ?? toneMap.accent;
   return (
     <article className={`interactive-lift relative overflow-hidden rounded-xl px-4 py-3 ${meta.shell}`}>
-      <div className={`absolute left-0 top-0 h-full w-0.5 rounded-l-xl ${meta.bar}`} aria-hidden="true" />
+      <div className={`absolute left-0 top-0 h-full w-1 rounded-l-xl ${meta.bar}`} aria-hidden="true" />
       <p className="pl-2 text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
       <div className="mt-2 pl-2">
         <p className="headline-font text-xl font-extrabold tracking-[-0.04em] text-[var(--ink)] sm:text-2xl">{value}</p>

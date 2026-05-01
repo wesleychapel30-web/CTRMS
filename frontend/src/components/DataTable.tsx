@@ -104,7 +104,7 @@ export function DataTable<T extends Record<string, unknown>>({
               </tr>
             ) : null}
             {rows.map((row, index) => (
-              <tr key={index} className="group border-t border-[var(--surface-container)]/70 transition first:border-t-0 hover:bg-[var(--surface-low)]/50">
+              <tr key={index} className="group border-t border-[var(--surface-container)]/70 transition first:border-t-0 hover:bg-[var(--surface-low)]">
                 {columns.map((column) => (
                   <td key={column.label} className={`${cellPadding} text-[var(--ink)]`}>
                     {column.render ? column.render(row) : String(row[column.key as keyof T] ?? "")}

@@ -106,7 +106,7 @@ export function Sidebar({ items, user, branding, onLogout, isOpen, onClose }: Si
           <nav className="no-scrollbar flex-1 overflow-y-auto px-2 pb-3">
             {grouped.map((section) => (
               <div key={section.group} className="mb-3">
-                <p className="px-3 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--sidebar-muted)]">{section.group}</p>
+                <p className="px-3 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--sidebar-muted)]">{section.group}</p>
                 <div className="space-y-0.5">
                   {section.items.map((item) => (
                     <NavLink
@@ -114,10 +114,10 @@ export function Sidebar({ items, user, branding, onLogout, isOpen, onClose }: Si
                       to={item.href}
                       onClick={onClose}
                       className={({ isActive }) =>
-                        `interactive-press flex items-center gap-2.5 rounded-md px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-all ${
+                        `interactive-press flex items-center gap-2.5 rounded-md py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-all ${
                           isActive
-                            ? "bg-[var(--sidebar-active)] text-white shadow-sm"
-                            : "text-[var(--sidebar-text)]/80 hover:bg-[var(--sidebar-hover)] hover:text-white"
+                            ? "border-l-2 border-[var(--accent)] bg-[var(--sidebar-active)] pl-[10px] pr-3 text-white shadow-sm"
+                            : "px-3 text-[var(--sidebar-text)]/80 hover:bg-[var(--sidebar-hover)] hover:text-white"
                         }`
                       }
                     >
