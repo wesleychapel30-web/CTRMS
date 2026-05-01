@@ -48,7 +48,7 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
           </div>
           <div>
             <p className="headline-font text-base font-bold tracking-[-0.03em] text-white">{siteName}</p>
-            <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/40">{orgName}</p>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/58">{orgName}</p>
           </div>
         </div>
 
@@ -58,7 +58,7 @@ export function AuthLayout({ branding, title, children }: AuthLayoutProps) {
             <h2 className="headline-font text-[2.1rem] font-extrabold leading-[1.1] tracking-[-0.05em] text-white xl:text-[2.5rem]">
               Enterprise request management.
             </h2>
-            <p className="mt-4 max-w-[26rem] text-[15px] leading-relaxed text-white/48">
+            <p className="mt-4 max-w-[26rem] text-[15px] leading-relaxed text-white/68">
               Approvals, procurement, and payments in one workspace.
             </p>
           </div>
