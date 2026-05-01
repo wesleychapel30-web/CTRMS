@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
+import { RefreshProvider } from "./context/RefreshContext";
 import { StatePanel } from "./components/FeedbackStates";
 import { useSession } from "./context/SessionContext";
 import { ActivityPage } from "./pages/ActivityPage";
@@ -207,6 +208,7 @@ function App() {
 
   return (
     <div data-theme={theme} className="min-h-screen text-slate-950 dark:text-slate-100">
+      <RefreshProvider>
       <AppShell
         title={meta.title}
         subtitle={meta.subtitle}
@@ -237,6 +239,7 @@ function App() {
           <Route path="*" element={<Navigate to={fallbackRoute} replace />} />
         </Routes>
       </AppShell>
+      </RefreshProvider>
     </div>
   );
 }

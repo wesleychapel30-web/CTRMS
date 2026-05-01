@@ -8,6 +8,7 @@ import { SectionCard } from "../components/SectionCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useSession } from "../context/SessionContext";
 import { useToast } from "../context/ToastContext";
+import { useRefresh } from "../context/RefreshContext";
 import { downloadApiFile, fetchRequests } from "../lib/api";
 import { formatCurrency, formatDate } from "../lib/format";
 import type { RequestRecord } from "../types";
@@ -23,6 +24,7 @@ const requestCategoryOptions = [
 export function RequestsPage() {
   const { hasPermission } = useSession();
   const toast = useToast();
+  const { refreshTick } = useRefresh();
   const [rows, setRows] = useState<RequestRecord[]>([]);
   const [count, setCount] = useState(0);
   const [searchInput, setSearchInput] = useState("");
@@ -63,7 +65,9 @@ export function RequestsPage() {
 
   useEffect(() => {
     loadRequests();
-  }, [search, status, category, page, ordering]);
+  // refreshTick intentionally included so incoming notifications trigger a re-fetch
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, status, category, page, ordering, refreshTick]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {

@@ -13,6 +13,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { WorkflowActionBar } from "../components/WorkflowActionBar";
 import { WorkspaceTabs } from "../components/WorkspaceTabs";
 import { useToast } from "../context/ToastContext";
+import { useRefresh } from "../context/RefreshContext";
 import {
   addEnterpriseProcurementApprovalComment,
   addFinanceInvoiceApprovalComment,
@@ -92,6 +93,7 @@ function queueTabLabel(tab: ApprovalQueueTab) {
 
 export function ApprovalInboxPage() {
   const toast = useToast();
+  const { refreshTick } = useRefresh();
   const [inbox, setInbox] = useState<ApprovalInbox | null>(null);
   const [procurementWorkspace, setProcurementWorkspace] = useState<ProcurementWorkspace | null>(null);
   const [financeWorkspace, setFinanceWorkspace] = useState<FinanceWorkspace | null>(null);
@@ -108,8 +110,8 @@ export function ApprovalInboxPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const load = async () => {
-    setIsLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const [nextInbox, nextProcurementWorkspace, nextFinanceWorkspace] = await Promise.all([
         fetchApprovalInbox(),
@@ -124,13 +126,20 @@ export function ApprovalInboxPage() {
     } catch (reason) {
       setError(getErrorMessage(reason));
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     void load();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    // Background refresh: only runs after the first load has completed
+    if (!inbox) return;
+    void load(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
 
   useEffect(() => {
     setDecisionNote("");

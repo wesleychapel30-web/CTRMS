@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchNotifications } from "./api";
 import type { NotificationItem } from "../types";
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 15_000;
 
 type UseNotificationPollResult = {
   notifications: NotificationItem[];

@@ -10,6 +10,7 @@ import { SectionCard } from "../components/SectionCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useSession } from "../context/SessionContext";
 import { useToast } from "../context/ToastContext";
+import { useRefresh } from "../context/RefreshContext";
 import {
   addRequestTimelineEntry,
   addRequestPayment,
@@ -61,6 +62,7 @@ export function RequestDetailsPage() {
   const { requestId } = useParams();
   const { hasPermission, hasRole } = useSession();
   const toast = useToast();
+  const { refreshTick } = useRefresh();
   const [requestRecord, setRequestRecord] = useState<RequestRecord | null>(null);
   const [notes, setNotes] = useState("");
   const [approvedAmount, setApprovedAmount] = useState("");
@@ -82,12 +84,12 @@ export function RequestDetailsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadRequest = async () => {
+  const loadRequest = async (silent = false) => {
     if (!requestId) {
       return;
     }
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const data = await fetchRequest(requestId);
       setLoadError(null);
       setRequestRecord(data);
@@ -109,7 +111,16 @@ export function RequestDetailsPage() {
 
   useEffect(() => {
     void loadRequest();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestId]);
+
+  useEffect(() => {
+    // Guard: requestRecord is null until the initial load resolves,
+    // so this safely skips the first render and only fires on subsequent ticks.
+    if (!requestRecord) return;
+    void loadRequest(true); // silent background refresh — no loading spinner
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
 
   if (loadError) {
     return <StatePanel variant="error" title="Request unavailable" message={loadError} actionLabel="Retry" onAction={() => void loadRequest()} />;

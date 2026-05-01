@@ -3,6 +3,7 @@ import { BarChart, DonutChart, LineChart, Timeline } from "../components/Charts"
 import { StatePanel } from "../components/FeedbackStates";
 import { SectionCard } from "../components/SectionCard";
 import { StatCard } from "../components/StatCard";
+import { useRefresh } from "../context/RefreshContext";
 import { fetchEnterpriseOverview, fetchPublicBranding } from "../lib/api";
 import { formatCurrency } from "../lib/format";
 import type { BrandingSettings, ChartDatum, EnterpriseOverview, Stat } from "../types";
@@ -19,9 +20,11 @@ export function DashboardPage() {
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { refreshTick } = useRefresh();
 
   useEffect(() => {
-    setIsLoading(true);
+    // Suppress the loading spinner on background refreshes (when we already have data)
+    if (!overview) setIsLoading(true);
     Promise.all([fetchEnterpriseOverview(), fetchPublicBranding()])
       .then(([enterprisePayload, brandingPayload]) => {
         setOverview(enterprisePayload);
@@ -30,7 +33,9 @@ export function DashboardPage() {
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to load the dashboard"))
       .finally(() => setIsLoading(false));
-  }, []);
+    // refreshTick intentionally included so incoming notifications trigger a re-fetch
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
 
   const currencyCode = overview?.organization?.currency_code ?? "TZS";
   const moduleMixData = useMemo(() => {

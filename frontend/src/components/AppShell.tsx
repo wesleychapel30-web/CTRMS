@@ -3,8 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { navItems } from "../config/navigation";
 import { fetchGlobalSearch, fetchPublicBranding, markNotificationRead, resolveAssetUrl } from "../lib/api";
 import { fireDesktopNotification, getNotificationMeta, requestDesktopPermission } from "../lib/notifications";
+import { playNotificationSound } from "../lib/notificationSound";
 import { useNotificationPoll } from "../lib/useNotificationPoll";
 import { useToast } from "../context/ToastContext";
+import { useRefresh } from "../context/RefreshContext";
 import { Sidebar } from "./Sidebar";
 import { TopHeader } from "./TopHeader";
 import type { BrandingSettings, NotificationItem, SessionUser, ThemeMode } from "../types";
@@ -27,17 +29,36 @@ export function AppShell({ title, subtitle, theme, onToggleTheme, user, onLogout
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   const { showToast } = useToast();
+  const { triggerRefresh } = useRefresh();
 
   const handleNewNotifications = useCallback(
     (newItems: NotificationItem[]) => {
+      // Signal all subscribed pages to re-fetch their data
+      triggerRefresh();
+
+      // Play a single chime for the batch (not once per notification)
+      playNotificationSound();
+
       for (const item of newItems.slice(0, 3)) {
         const meta = getNotificationMeta(item);
-        const title = item.title || meta.fallbackTitle;
-        showToast("info", { title, message: item.message || title, durationMs: 5500 });
-        fireDesktopNotification(title, item.message || "", item.href);
+        const titleText = item.title || meta.fallbackTitle;
+        const lower = titleText.toLowerCase();
+
+        // Map notification title → appropriate toast variant
+        let variant: "success" | "error" | "warning" | "info" = "info";
+        if (lower.includes("approved") || lower.includes("payment recorded") || lower.includes("paid")) {
+          variant = "success";
+        } else if (lower.includes("rejected") || lower.includes("cancelled")) {
+          variant = "error";
+        } else if (lower.includes("clarification") || lower.includes("query") || lower.includes("overdue") || lower.includes("pending")) {
+          variant = "warning";
+        }
+
+        showToast(variant, { title: titleText, message: item.message || titleText, durationMs: 5500 });
+        fireDesktopNotification(titleText, item.message || "", item.href);
       }
     },
-    [showToast],
+    [showToast, triggerRefresh],
   );
 
   const {
