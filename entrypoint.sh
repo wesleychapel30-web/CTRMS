@@ -4,6 +4,16 @@ set -e
 export DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-ctrms_config.settings}
 export PORT=${PORT:-8000}
 
+# Ensure media directory exists (important on first boot with a fresh persistent disk)
+python -c "
+import os, sys
+sys.path.insert(0, '.')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ctrms_config.settings')
+import django; django.setup()
+from django.conf import settings
+settings.MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+"
+
 python manage.py migrate --noinput
 python manage.py bootstrap_ctrms
 

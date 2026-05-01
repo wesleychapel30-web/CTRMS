@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ctrms
+    runtime: python
+    buildCommand: "pip install -r requirements.txt && cd frontend && npm ci && npm run build && cd .."
+    startCommand: "./entrypoint.sh"
+    envVars:
+      - key: RENDER_DISK_PATH
+        value: /var/data
+      - key: SERVE_MEDIA
+        value: "true"
+      # All other secrets (SECRET_KEY, DATABASE_URL, ALLOWED_HOSTS, etc.)
+      # should be set in the Render dashboard — do not commit them here.
+    disk:
+      name: ctrms-uploads
+      mountPath: /var/data
+      sizeGB: 1
